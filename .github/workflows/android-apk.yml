@@ -1,0 +1,89 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Test & Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Decode debug keystore for CI build
+        run: |
+          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Run Unit & Robolectric Tests
+        run: gradle :app:testDebugUnitTest --no-daemon --console=plain
+
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug --no-daemon --console=plain
+
+      - name: Prepare Installable Debug APK
+        run: |
+          mkdir -p release-apks
+          cp app/build/outputs/apk/debug/app-debug.apk release-apks/SmartClipboard-debug.apk
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-clipboard-debug-apk
+          path: release-apks/SmartClipboard-debug.apk
+          if-no-files-found: error
+
+      - name: Build Signed Release APK (when release secrets are configured)
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
+            gradle :app:assembleRelease --no-daemon --console=plain
+            cp app/build/outputs/apk/release/app-release.apk release-apks/SmartClipboard-release.apk
+            rm -f my-upload-key.jks
+          else
+            echo "Release signing secrets not set; skipping release APK."
+          fi
+
+      - name: Upload Release APK Artifact (if built)
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-clipboard-release-apk
+          path: release-apks/SmartClipboard-release.apk
+          if-no-files-found: ignore
+
+      - name: Publish APK to GitHub Release on version tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-apks/*.apk

@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Smart Clipboard</string>
+    <string name="app_tagline">حافظة ذكية مشفرة تعمل محليًا أولًا</string>
+
+    <!-- Navigation (Concise for 1-line Bottom Bar) -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_all_clips">الحافظة</string>
+    <string name="nav_favorites">المفضلة</string>
+    <string name="nav_collections">المجلدات</string>
+    <string name="nav_search">البحث</string>
+    <string name="nav_integrations">التكاملات</string>
+    <string name="nav_backup_sync">المزامنة</string>
+    <string name="nav_settings">الإعدادات</string>
+    <string name="nav_trash">المحذوفات</string>
+    <string name="nav_clip_details">تفاصيل النص</string>
+
+    <!-- Actions & Common -->
+    <string name="action_add_clip">إضافة نص</string>
+    <string name="action_paste_from_clipboard">التقاط الحافظة</string>
+    <string name="action_copy">نسخ</string>
+    <string name="action_copied">تم النسخ إلى الحافظة</string>
+    <string name="action_edit">تعديل</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_restore">استعادة</string>
+    <string name="action_delete_forever">حذف نهائي</string>
+    <string name="action_pin">تثبيت</string>
+    <string name="action_unpin">إلغاء التثبيت</string>
+    <string name="action_favorite">إضافة للمفضلة</string>
+    <string name="action_unfavorite">إزالة من المفضلة</string>
+    <string name="action_share">مشاركة</string>
+    <string name="action_sync_now">مزامنة الآن</string>
+    <string name="action_back">رجوع</string>
+    <string name="action_select_all">تحديد الكل</string>
+    <string name="action_clear_selection">إلغاء التحديد</string>
+    <string name="action_close">إغلاق</string>
+    <string name="action_confirm">تأكيد</string>
+    <string name="action_clear">مسح</string>
+    <string name="action_move">نقل</string>
+    <string name="action_open_url">فتح الرابط</string>
+
+    <!-- Relative Time -->
+    <string name="time_now">الآن</string>
+    <string name="time_minutes_ago">منذ %1$d د</string>
+    <string name="time_hours_ago">منذ %1$d س</string>
+
+    <!-- Home & Stats -->
+    <string name="home_recent_clips">أحدث النصوص</string>
+    <string name="home_pinned_clips">العناصر المثبتة</string>
+    <string name="home_quick_capture">التقاط سريع</string>
+    <string name="home_clipboard_detected">تم رصد نص جديد في حافظة النظام</string>
+    <string name="home_save_detected">حفظ النص</string>
+    <string name="home_stat_total">الإجمالي</string>
+    <string name="home_stat_pinned">مثبتة</string>
+    <string name="home_stat_favorites">المفضلة</string>
+    <string name="home_shortcuts_title">اختصارات سريعة</string>
+    <string name="empty_clips_title">خزنة الحافظة فارغة</string>
+    <string name="empty_clips_subtitle">اضغط + لحفظ نص جديد، أو شارك نصًا من أي تطبيق، أو التقط حافظة النظام.</string>
+    <string name="empty_favorites_title">لا توجد عناصر مفضلة بعد</string>
+    <string name="empty_favorites_subtitle">ميّز النصوص والروابط والأكواد المهمة بنجمة للوصول إليها بنقرة واحدة.</string>
+    <string name="empty_trash_title">سلة المحذوفات فارغة</string>
+    <string name="empty_trash_subtitle">تبقى العناصر المحذوفة هنا قبل حذفها نهائيًا.</string>
+
+    <!-- All Clips & Bulk Selection -->
+    <string name="selected_count">تم تحديد %1$d</string>
+    <string name="bulk_move_to_collection">نقل إلى مجلد</string>
+    <string name="bulk_delete_confirm_msg">هل تريد نقل %1$d عنصر محدد إلى سلة المحذوفات؟</string>
+    <string name="no_clips_in_filter">لا توجد نصوص ضمن هذا التصنيف بعد.</string>
+
+    <!-- Collections -->
+    <string name="collections_new_folder">مجلد جديد</string>
+    <string name="collections_clip_count">%1$d عنصر</string>
+    <string name="collections_options">خيارات المجلد</string>
+    <string name="collections_rename_color">تعديل الاسم واللون</string>
+    <string name="collections_create_title">إنشاء مجلد جديد</string>
+    <string name="collections_edit_title">تعديل المجلد</string>
+    <string name="collections_folder_name">اسم المجلد</string>
+    <string name="collections_folder_color">لون المجلد</string>
+    <string name="collections_empty_title">هذا المجلد فارغ</string>
+    <string name="collections_empty_subtitle">اختر هذا المجلد عند الحفظ أو انقل العناصر إليه من تبويب الحافظة.</string>
+
+    <!-- Clip Fields & Types -->
+    <string name="label_title_optional">العنوان (اختياري)</string>
+    <string name="label_content">محتوى النص</string>
+    <string name="label_category">المجلد</string>
+    <string name="label_tags">الوسوم (مفصولة بفاصلة)</string>
+    <string name="label_content_type">نوع المحتوى</string>
+    <string name="label_sensitive">تشفير محلي (محتوى حساس)</string>
+    <string name="label_sensitive_hint">تشفير AES-256-GCM عبر Android Keystore وإخفاء المعاينة</string>
+    <string name="label_sensitive_masked">•••••••• (مشفر)</string>
+    <string name="label_sensitive_details_masked">المحتوى المشفر مخفي. اضغط «إظهار» أعلاه لفك التشفير محليًا.</string>
+    <string name="label_sensitive_chars">%1$d حرف مشفر</string>
+    <string name="type_text">نص</string>
+    <string name="type_link">رابط</string>
+    <string name="type_code">كود</string>
+    <string name="type_note">ملاحظة</string>
+    <string name="type_address">عنوان</string>
+    <string name="duplicate_detected_msg">تم العثور على نص مكرر — تم الدمج والتحديث</string>
+
+    <!-- Clip Details -->
+    <string name="details_not_found">العنصر غير موجود</string>
+    <string name="details_reveal">إظهار</string>
+    <string name="details_hide">إخفاء</string>
+    <string name="details_share_title">مشاركة النص</string>
+    <string name="details_sync_telegram">إرسال إلى تيليجرام</string>
+    <string name="details_sync_discord">إرسال إلى ديسكورد</string>
+    <string name="details_metadata_title">بيانات العنصر</string>
+    <string name="details_created">تاريخ الإنشاء</string>
+    <string name="details_updated">آخر تعديل</string>
+    <string name="details_source">المصدر</string>
+    <string name="details_hash">البصمة (SHA-256)</string>
+    <string name="details_delete_to_trash">نقل إلى المحذوفات</string>
+
+    <!-- Categories -->
+    <string name="cat_personal">شخصي</string>
+    <string name="cat_work">العمل</string>
+    <string name="cat_programming">البرمجة</string>
+    <string name="cat_links">الروابط</string>
+    <string name="cat_notes">الملاحظات</string>
+    <string name="cat_important">مهم</string>
+
+    <!-- Search -->
+    <string name="search_placeholder">ابحث في النصوص، الروابط، الأكواد، الوسوم…</string>
+    <string name="search_no_results">لا توجد نتائج مطابقة</string>
+    <string name="search_no_results_hint">جرّب كلمة مفتاحية أخرى، وسمًا، رابطًا، أو امسح الفلاتر الحالية.</string>
+    <string name="search_results_count">%1$d نتيجة (بحث محلي)</string>
+    <string name="search_filter_date">الفترة الزمنية</string>
+    <string name="search_filter_sort">الترتيب</string>
+    <string name="search_filter_type">نوع المحتوى</string>
+    <string name="search_filter_folder">المجلد</string>
+    <string name="search_clear_filters">إعادة ضبط</string>
+    <string name="filter_all">الكل</string>
+    <string name="filter_today">اليوم</string>
+    <string name="filter_week">آخر 7 أيام</string>
+    <string name="filter_month">آخر 30 يومًا</string>
+    <string name="sort_relevance">الأكثر صلة</string>
+    <string name="sort_newest">الأحدث</string>
+    <string name="sort_oldest">الأقدم</string>
+
+    <!-- Backup & Sync -->
+    <string name="sync_section_cloud">محرك المزامنة السحابية</string>
+    <string name="sync_section_local">النسخ الاحتياطي والاستعادة المحلية</string>
+    <string name="sync_section_drive">النسخ السحابية عبر جوجل درايف</string>
+    <string name="sync_section_logs">سجل عمليات المزامنة</string>
+    <string name="sync_never_synced">لم تتم المزامنة بعد</string>
+    <string name="sync_last_synced">آخر مزامنة: %1$s</string>
+    <string name="sync_status_syncing">جاري المزامنة…</string>
+    <string name="sync_status_connected">متصل</string>
+    <string name="sync_status_not_configured">غير مهيأ</string>
+    <string name="sync_status_error">خطأ</string>
+    <string name="sync_status_success">نجاح</string>
+    <string name="sync_auto_title">المزامنة التلقائية في الخلفية</string>
+    <string name="sync_auto_subtitle">تعمل كل %1$d ساعات عبر WorkManager عند توفر الإنترنت</string>
+    <string name="sync_configure_providers">إعداد التكاملات (تيليجرام، ديسكورد، درايف)</string>
+    <string name="sync_local_subtitle">تصدير ملفات قابلة للقراءة أو أرشيفات مشفرة (.scbak) عبر منتقي الملفات الرسمي.</string>
+    <string name="sync_export_json">JSON</string>
+    <string name="sync_export_csv">CSV</string>
+    <string name="sync_export_txt">TXT</string>
+    <string name="sync_export_encrypted">ملف مشفر (.scbak)</string>
+    <string name="sync_restore_local">استعادة من نسخة محلية (.json / .scbak)</string>
+    <string name="sync_drive_not_connected">اربط حساب جوجل درايف من شاشة التكاملات لرفع النسخ الاحتياطية واستعادتها.</string>
+    <string name="sync_drive_backup_now">نسخ احتياطي الآن</string>
+    <string name="sync_drive_refresh">تحديث</string>
+    <string name="sync_logs_empty">لا توجد عمليات مزامنة مسجلة حتى الآن.</string>
+    <string name="passphrase_title">كلمة مرور النسخة الاحتياطية</string>
+    <string name="passphrase_hint">أدخل عبارة مرور (6 أحرف على الأقل) لتشفير أو فك تشفير النسخة الاحتياطية بتقنية AES-256-GCM.</string>
+    <string name="passphrase_label">عبارة المرور</string>
+
+    <!-- Integrations -->
+    <string name="telegram_title">بوت تيليجرام</string>
+    <string name="telegram_subtitle">إرسال النصوص إلى البوت واستقبال الرسائل المرسلة إليه</string>
+    <string name="telegram_notice">ملاحظة: افتح محادثة البوت في تيليجرام وأرسل /start أولًا. لا يمكن للبوت قراءة محادثاتك الخاصة الأخرى.</string>
+    <string name="telegram_token_label">رمز البوت (Bot Token من @BotFather)</string>
+    <string name="telegram_chat_id_label">معرّف المحادثة (Chat ID)</string>
+    <string name="telegram_detect_id">اكتشاف المعرّف</string>
+    <string name="discord_title">مساحة ديسكورد</string>
+    <string name="discord_subtitle">الإرسال عبر Webhook، والاستقبال من القناة عبر Bot Token مصرح به</string>
+    <string name="discord_notice">روابط Webhook تدعم الإرسال فقط؛ استقبال رسائل القناة يتطلب Bot Token مصرحًا به ومعرّف القناة بشكل منفصل.</string>
+    <string name="discord_webhook_label">رابط Webhook للإرسال فقط</string>
+    <string name="discord_bot_token_label">رمز البوت المصرح له (اختياري للاستقبال)</string>
+    <string name="discord_channel_label">معرّف القناة (Channel ID)</string>
+    <string name="drive_title">جوجل درايف</string>
+    <string name="drive_subtitle">نسخ احتياطية مشفرة أو نصية عبر OAuth 2.0 في مجلد التطبيق أو مجلد مخصص</string>
+    <string name="drive_signed_in">تم تسجيل الدخول: %1$s</string>
+    <string name="drive_folder_label">مسار الحفظ: %1$s</string>
+    <string name="drive_last_backup">آخر نسخة على درايف: %1$s</string>
+    <string name="drive_encrypt_toggle">تشفير نسخ جوجل درايف (.scbak)</string>
+    <string name="drive_connect">ربط جوجل درايف</string>
+    <string name="drive_reauth">إعادة تفويض درايف</string>
+    <string name="drive_choose_folder">اختيار مجلد</string>
+    <string name="drive_disconnect">فصل جوجل درايف</string>
+    <string name="drive_folder_dialog_title">اختيار موقع النسخ الاحتياطي</string>
+    <string name="drive_folder_appdata">مجلد التطبيق الخاص (موصى به)</string>
+    <string name="drive_folder_or_pick">أو اختر / أنشئ مجلدًا على درايف:</string>
+    <string name="drive_folder_new_name">اسم المجلد الجديد</string>
+    <string name="drive_folder_create_select">إنشاء واختيار المجلد</string>
+    <string name="integration_auto_sync">تضمين في المزامنة التلقائية</string>
+    <string name="integration_save_test">حفظ واختبار</string>
+    <string name="integration_toggle_visibility">إظهار أو إخفاء الرمز السري</string>
+    <string name="integration_status_prefix">الحالة: %1$s</string>
+
+    <!-- Settings -->
+    <string name="settings_group_appearance">المظهر واللغة</string>
+    <string name="settings_theme_label">سمة التطبيق</string>
+    <string name="settings_theme_system">النظام</string>
+    <string name="settings_theme_light">فاتح</string>
+    <string name="settings_theme_dark">داكن</string>
+    <string name="settings_language_label">لغة التطبيق والاتجاه (RTL / LTR)</string>
+    <string name="settings_lang_system">لغة النظام</string>
+    <string name="settings_lang_english">English</string>
+    <string name="settings_lang_arabic">العربية</string>
+    <string name="settings_group_security">الخصوصية والأمان</string>
+    <string name="settings_applock_title">قفل التطبيق بالبصمة أو رمز الجهاز</string>
+    <string name="settings_applock_subtitle">طلب المصادقة عند فتح Smart Clipboard لحماية نصوصك المشفرة</string>
+    <string name="settings_autocapture_title">رصد الحافظة عند فتح التطبيق</string>
+    <string name="settings_autocapture_subtitle">عرض اقتراح حفظ للنصوص المنسوخة حديثًا في الواجهة دون مراقبة خلفية</string>
+    <string name="settings_clear_sys_clipboard">مسح حافظة النظام الآن</string>
+    <string name="settings_group_data">السجل والتحكم بالبيانات</string>
+    <string name="settings_retention_label">مدة الاحتفاظ بالسجل</string>
+    <string name="settings_retention_forever">دائم</string>
+    <string name="settings_retention_days">%1$d يوم</string>
+    <string name="settings_wipe_hint">مسح جميع النصوص المحلية وسجلات المزامنة ومفاتيح التكامل المخزنة نهائيًا.</string>
+    <string name="settings_wipe_btn">مسح جميع البيانات المحلية</string>
+    <string name="settings_wipe_confirm_title">مسح جميع البيانات نهائيًا؟</string>
+    <string name="settings_wipe_confirm_msg">سيؤدي هذا إلى حذف كل النصوص وعناصر السلة وسجلات المزامنة وبيانات التكامل من هذا الجهاز بلا رجعة.</string>
+    <string name="settings_wipe_confirm_btn">مسح نهائي</string>
+
+    <!-- Trash -->
+    <string name="trash_items_count">%1$d عنصر في المحذوفات</string>
+    <string name="trash_empty_btn">إفراغ السلة</string>
+    <string name="trash_deleted_at">حُذف %1$s</string>
+    <string name="trash_empty_confirm_title">إفراغ سلة المحذوفات؟</string>
+    <string name="trash_empty_confirm_msg">هل تريد حذف جميع العناصر (%1$d) نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.</string>
+
+    <!-- Security & Lock -->
+    <string name="lock_title">الحافظة الذكية مقفلة</string>
+    <string name="lock_subtitle">تحقق بالبصمة أو رمز قفل الجهاز للوصول إلى النصوص المشفرة</string>
+    <string name="lock_unlock_button">فتح القفل</string>
+
+    <!-- Feedback & Snackbar Messages -->
+    <string name="msg_clip_saved">تم حفظ النص</string>
+    <string name="msg_clip_merged">تم دمج التكرار وتحديثه</string>
+    <string name="msg_clip_updated">تم تحديث النص</string>
+    <string name="msg_moved_to_trash">تم نقل %1$d عنصر إلى سلة المحذوفات</string>
+    <string name="msg_restored_items">تمت استعادة %1$d عنصر</string>
+    <string name="msg_deleted_forever">تم الحذف النهائي لـ %1$d عنصر</string>
+    <string name="msg_trash_emptied">تم إفراغ سلة المحذوفات</string>
+    <string name="msg_moved_items">تم نقل %1$d عنصر</string>
+    <string name="msg_moved_to_collection">تم النقل إلى المجلد</string>
+    <string name="msg_collection_created">تم إنشاء مجلد «%1$s»</string>
+    <string name="msg_collection_updated">تم تحديث المجلد</string>
+    <string name="msg_collection_deleted">تم حذف المجلد ونقل عناصره إلى شخصي</string>
+    <string name="msg_cleaned_expired">تم تنظيف %1$d عنصر منتهي الصلاحية</string>
+    <string name="msg_sys_clipboard_cleared">تم مسح حافظة النظام</string>
+    <string name="msg_all_data_wiped">تم مسح جميع النصوص والسجلات وبيانات التكامل نهائيًا</string>
+    <string name="msg_telegram_saved">تم حفظ إعدادات تيليجرام</string>
+    <string name="msg_telegram_chat_detected">تم اكتشاف معرّف المحادثة: %1$s</string>
+    <string name="msg_discord_saved">تم حفظ إعدادات ديسكورد</string>
+    <string name="msg_drive_saved">تم حفظ تفضيلات جوجل درايف</string>
+    <string name="msg_drive_disconnected">تم فصل حساب جوجل درايف</string>
+    <string name="msg_drive_folder_created">تم إنشاء واختيار مجلد درايف: %1$s</string>
+    <string name="msg_drive_backup_saved">تم حفظ نسخة جوجل درايف: %1$s</string>
+    <string name="msg_restore_summary">تمت استعادة %1$d عنصر (دمج %2$d مكرر، التحقق=%3$s)</string>
+    <string name="msg_restore_failed">فشلت الاستعادة: %1$s</string>
+    <string name="msg_autosync_scheduled">تمت جدولة المزامنة التلقائية كل %1$d ساعات</string>
+    <string name="msg_autosync_paused">تم إيقاف المزامنة التلقائية</string>
+</resources>

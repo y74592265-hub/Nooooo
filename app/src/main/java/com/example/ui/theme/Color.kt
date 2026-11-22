@@ -1,0 +1,78 @@
+package com.example.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+// Light Palette — Google Material 3 Editorial Slate & Cobalt
+val PrimaryLight = Color(0xFF1A56DB)
+val OnPrimaryLight = Color(0xFFFFFFFF)
+val PrimaryContainerLight = Color(0xFFDCE8FF)
+val OnPrimaryContainerLight = Color(0xFF0A2463)
+
+val SecondaryLight = Color(0xFF0E7490)
+val OnSecondaryLight = Color(0xFFFFFFFF)
+val SecondaryContainerLight = Color(0xFFD9F3FA)
+val OnSecondaryContainerLight = Color(0xFF063240)
+
+val TertiaryLight = Color(0xFF0F766E)
+val OnTertiaryLight = Color(0xFFFFFFFF)
+val TertiaryContainerLight = Color(0xFFCCFBF1)
+val OnTertiaryContainerLight = Color(0xFF042F2E)
+
+val BackgroundLight = Color(0xFFF7F9FC)
+val OnBackgroundLight = Color(0xFF0F172A)
+val SurfaceLight = Color(0xFFFFFFFF)
+val OnSurfaceLight = Color(0xFF0F172A)
+val SurfaceVariantLight = Color(0xFFE9EFF6)
+val OnSurfaceVariantLight = Color(0xFF475569)
+val SurfaceContainerLowestLight = Color(0xFFFFFFFF)
+val SurfaceContainerLowLight = Color(0xFFF2F5FA)
+val SurfaceContainerLight = Color(0xFFECF1F7)
+val SurfaceContainerHighLight = Color(0xFFE3EAF3)
+val SurfaceContainerHighestLight = Color(0xFFD9E2EE)
+val OutlineLight = Color(0xFF94A3B8)
+val OutlineVariantLight = Color(0xFFDCE3EE)
+val ErrorLight = Color(0xFFDC2626)
+val OnErrorLight = Color(0xFFFFFFFF)
+val ErrorContainerLight = Color(0xFFFEE2E2)
+val OnErrorContainerLight = Color(0xFF7F1D1D)
+
+// Dark Palette — Balanced Midnight Slate & Soft Cobalt
+val PrimaryDark = Color(0xFF7AB2FF)
+val OnPrimaryDark = Color(0xFF08255A)
+val PrimaryContainerDark = Color(0xFF173A7A)
+val OnPrimaryContainerDark = Color(0xFFDCE8FF)
+
+val SecondaryDark = Color(0xFF5EEAD4)
+val OnSecondaryDark = Color(0xFF042F2E)
+val SecondaryContainerDark = Color(0xFF134E4A)
+val OnSecondaryContainerDark = Color(0xFFCCFBF1)
+
+val TertiaryDark = Color(0xFF67E8F9)
+val OnTertiaryDark = Color(0xFF083344)
+val TertiaryContainerDark = Color(0xFF164E63)
+val OnTertiaryContainerDark = Color(0xFFCFFAFE)
+
+val BackgroundDark = Color(0xFF0B1220)
+val OnBackgroundDark = Color(0xFFE8EEF7)
+val SurfaceDark = Color(0xFF111A2B)
+val OnSurfaceDark = Color(0xFFE8EEF7)
+val SurfaceVariantDark = Color(0xFF1D293D)
+val OnSurfaceVariantDark = Color(0xFF9BA9BF)
+val SurfaceContainerLowestDark = Color(0xFF080E1A)
+val SurfaceContainerLowDark = Color(0xFF111A2B)
+val SurfaceContainerDark = Color(0xFF162134)
+val SurfaceContainerHighDark = Color(0xFF1D293F)
+val SurfaceContainerHighestDark = Color(0xFF25344E)
+val OutlineDark = Color(0xFF64748B)
+val OutlineVariantDark = Color(0xFF283548)
+val ErrorDark = Color(0xFFFCA5A5)
+val OnErrorDark = Color(0xFF690005)
+val ErrorContainerDark = Color(0xFF7F1D1D)
+val OnErrorContainerDark = Color(0xFFFEE2E2)
+
+// Semantic Accents (Always paired with icons/text, never color-only)
+val SuccessGreen = Color(0xFF15803D)
+val SuccessGreenDark = Color(0xFF4ADE80)
+val WarningAmber = Color(0xFFD97706)
+val PinAccent = Color(0xFF1A56DB)
+val FavoriteGold = Color(0xFFD97706)

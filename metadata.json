@@ -1,0 +1,6 @@
+{
+  "name": "Smart Clipboard",
+  "description": "Local-first encrypted Smart Clipboard Manager with smart categorization, instant offline search, WorkManager sync, and Telegram, Discord & Google Drive integrations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
