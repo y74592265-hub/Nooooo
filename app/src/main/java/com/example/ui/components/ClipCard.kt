@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -72,16 +71,12 @@ fun ClipCard(
   onFavoriteToggle: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val containerColor by
-    animateColorAsState(
-      targetValue =
-        when {
-          isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-          clip.isPinned -> MaterialTheme.colorScheme.surfaceContainerLow
-          else -> MaterialTheme.colorScheme.surface
-        },
-      label = "clip_card_bg",
-    )
+  val containerColor =
+    when {
+      isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+      clip.isPinned -> MaterialTheme.colorScheme.surfaceContainerLow
+      else -> MaterialTheme.colorScheme.surface
+    }
 
   val border =
     when {

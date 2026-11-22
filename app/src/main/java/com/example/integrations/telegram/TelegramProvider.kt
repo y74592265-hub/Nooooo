@@ -8,6 +8,7 @@ import com.example.domain.repository.CategoryRepository
 import com.example.integrations.IntegrationProvider
 import com.example.integrations.ProviderResult
 import com.example.integrations.PulledClip
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -25,17 +26,27 @@ constructor(
 
   override val providerId: SyncProviderId = SyncProviderId.TELEGRAM
 
+  private fun sanitizeToken(raw: String): String? {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return null
+    if (trimmed.any { it.isWhitespace() || it.code < 0x20 || it.code == 0x7F }) return null
+    return trimmed
+  }
+
   override suspend fun isConfigured(): Boolean {
     val cfg = prefs.getTelegramConfigOnce()
-    return cfg.enabled && cfg.botToken.isNotBlank() && cfg.chatId.isNotBlank()
+    return cfg.enabled && sanitizeToken(cfg.botToken) != null && cfg.chatId.isNotBlank()
   }
 
   override suspend fun testConnection(): ProviderResult<String> =
     withContext(Dispatchers.IO) {
       val cfg = prefs.getTelegramConfigOnce()
-      val token = cfg.botToken.trim()
-      if (token.isEmpty()) {
-        return@withContext ProviderResult.Error("Telegram Bot Token is empty.")
+      val token = sanitizeToken(cfg.botToken)
+      if (token == null) {
+        return@withContext ProviderResult.Error(
+          if (cfg.botToken.isBlank()) "Telegram Bot Token is empty."
+          else "Telegram Bot Token contains invalid spaces or control characters."
+        )
       }
       try {
         val meResp = api.getMe(token)
@@ -44,7 +55,6 @@ constructor(
           return@withContext ProviderResult.Error("Telegram API error: $msg")
         }
         val botUsername = meResp.body()?.result?.username ?: "Bot"
-        // If user hasn't entered chatId yet, check updates for a /start message
         var resolvedChatId = cfg.chatId.trim()
         if (resolvedChatId.isEmpty()) {
           val updatesResp = api.getUpdates(token = token, limit = 20)
@@ -65,17 +75,24 @@ constructor(
         }
         prefs.saveTelegramConfig(cfg.copy(lastStatus = "Connected to @$botUsername"))
         ProviderResult.Success("Connected to @$botUsername (Chat ID: $resolvedChatId)", botUsername)
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error reaching Telegram: ${e.localizedMessage}", isRetryable = true)
       } catch (e: Exception) {
-        ProviderResult.Error("Telegram connection failed: ${e.localizedMessage}")
+        ProviderResult.Error("Telegram connection failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
   suspend fun detectChatIdFromUpdates(botToken: String): ProviderResult<String> =
     withContext(Dispatchers.IO) {
-      val token = botToken.trim()
-      if (token.isEmpty()) return@withContext ProviderResult.Error("Enter Bot Token first.")
+      val token = sanitizeToken(botToken)
+      if (token == null) {
+        return@withContext ProviderResult.Error(
+          if (botToken.isBlank()) "Enter Bot Token first."
+          else "Bot Token contains invalid characters or spaces."
+        )
+      }
       try {
         val resp = api.getUpdates(token = token, limit = 30)
         if (!resp.isSuccessful || resp.body()?.ok != true) {
@@ -92,32 +109,36 @@ constructor(
         } else {
           ProviderResult.Success(chatId)
         }
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error: ${e.localizedMessage}", isRetryable = true)
+      } catch (e: Exception) {
+        ProviderResult.Error("Telegram update check failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
   override suspend fun pushClips(clips: List<ClipItem>): ProviderResult<Int> =
     withContext(Dispatchers.IO) {
       val cfg = prefs.getTelegramConfigOnce()
-      if (!cfg.enabled || cfg.botToken.isBlank() || cfg.chatId.isBlank()) {
+      val token = sanitizeToken(cfg.botToken)
+      val chatId = cfg.chatId.trim()
+      if (!cfg.enabled || token == null || chatId.isEmpty()) {
         return@withContext ProviderResult.Error("Telegram integration is not configured.")
       }
       val categories = categoryRepository.getAllCategoriesOnce().associateBy { it.id }
       var sentCount = 0
       try {
-        // Avoid pushing sensitive encrypted items automatically unless explicitly pushed individually
         val exportable = clips.filter { !it.isSensitive && !it.isTrashed }
         for (clip in exportable) {
           val categoryName = categories[clip.categoryId]?.name ?: "Personal"
           val formatted = buildTelegramText(clip, categoryName)
-          // Chunk messages cleanly below Telegram's 4096 char limit
           val chunks = formatted.chunked(3800)
           for (chunk in chunks) {
             val resp =
               api.sendMessage(
-                token = cfg.botToken.trim(),
-                body = TelegramSendMessageRequest(chatId = cfg.chatId.trim(), text = chunk),
+                token = token,
+                body = TelegramSendMessageRequest(chatId = chatId, text = chunk),
               )
             if (!resp.isSuccessful || resp.body()?.ok != true) {
               val code = resp.code()
@@ -135,22 +156,26 @@ constructor(
           cfg.copy(lastSyncAt = System.currentTimeMillis(), lastStatus = "Pushed $sentCount clips")
         )
         ProviderResult.Success(sentCount)
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error sending to Telegram", isRetryable = true)
       } catch (e: Exception) {
-        ProviderResult.Error("Telegram push failed: ${e.localizedMessage}")
+        ProviderResult.Error("Telegram push failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
   override suspend fun pullClips(): ProviderResult<List<PulledClip>> =
     withContext(Dispatchers.IO) {
       val cfg = prefs.getTelegramConfigOnce()
-      if (!cfg.enabled || cfg.botToken.isBlank() || cfg.chatId.isBlank()) {
+      val token = sanitizeToken(cfg.botToken)
+      val chatId = cfg.chatId.trim()
+      if (!cfg.enabled || token == null || chatId.isEmpty()) {
         return@withContext ProviderResult.Error("Telegram integration is not configured.")
       }
       try {
         val offset = if (cfg.lastUpdateOffset > 0L) cfg.lastUpdateOffset + 1L else null
-        val resp = api.getUpdates(token = cfg.botToken.trim(), offset = offset, limit = 50)
+        val resp = api.getUpdates(token = token, offset = offset, limit = 50)
         if (!resp.isSuccessful || resp.body()?.ok != true) {
           val code = resp.code()
           return@withContext ProviderResult.Error(
@@ -165,7 +190,7 @@ constructor(
         for (upd in updates) {
           if (upd.updateId > maxUpdateId) maxUpdateId = upd.updateId
           val msg = upd.message ?: continue
-          if (msg.chat.id.toString() != cfg.chatId.trim()) continue
+          if (msg.chat.id.toString() != chatId) continue
           val rawText = (msg.text ?: msg.caption)?.trim().orEmpty()
           if (rawText.isEmpty() || rawText.startsWith("/start")) continue
 
@@ -193,10 +218,12 @@ constructor(
           )
         )
         ProviderResult.Success(pulled)
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error pulling Telegram updates", isRetryable = true)
       } catch (e: Exception) {
-        ProviderResult.Error("Telegram pull failed: ${e.localizedMessage}")
+        ProviderResult.Error("Telegram pull failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 

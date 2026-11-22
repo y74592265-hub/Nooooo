@@ -24,6 +24,7 @@ import com.example.integrations.gdrive.GoogleDriveProvider
 import com.example.integrations.telegram.TelegramProvider
 import com.example.ui.components.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -91,8 +92,22 @@ constructor(
   private val _pendingConsentIntent = MutableSharedFlow<android.app.PendingIntent>()
   val pendingConsentIntent: SharedFlow<android.app.PendingIntent> = _pendingConsentIntent.asSharedFlow()
 
-  private val _statusMessages = MutableSharedFlow<UiText>()
+  private val _statusMessages = MutableSharedFlow<UiText>(extraBufferCapacity = 8)
   val statusMessages: SharedFlow<UiText> = _statusMessages.asSharedFlow()
+
+  private suspend inline fun runBusyAction(crossinline block: suspend () -> Unit) {
+    if (_isBusy.value) return
+    _isBusy.value = true
+    try {
+      block()
+    } catch (ce: CancellationException) {
+      throw ce
+    } catch (e: Exception) {
+      _statusMessages.tryEmit(UiText.Dynamic(e.localizedMessage ?: "Operation failed"))
+    } finally {
+      _isBusy.value = false
+    }
+  }
 
   fun saveTelegramConfig(config: TelegramConfig) {
     viewModelScope.launch {
@@ -103,27 +118,27 @@ constructor(
 
   fun testTelegramConnection() {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = telegramProvider.testConnection()) {
-        is ProviderResult.Success -> _statusMessages.emit(UiText.Dynamic(res.data))
-        is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+      runBusyAction {
+        when (val res = telegramProvider.testConnection()) {
+          is ProviderResult.Success -> _statusMessages.emit(UiText.Dynamic(res.data))
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+        }
       }
-      _isBusy.value = false
     }
   }
 
   fun detectTelegramChatId(botToken: String) {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = telegramProvider.detectChatIdFromUpdates(botToken)) {
-        is ProviderResult.Success -> {
-          val cur = prefs.getTelegramConfigOnce()
-          prefs.saveTelegramConfig(cur.copy(botToken = botToken.trim(), chatId = res.data))
-          _statusMessages.emit(UiText.Resource(R.string.msg_telegram_chat_detected, listOf(res.data)))
+      runBusyAction {
+        when (val res = telegramProvider.detectChatIdFromUpdates(botToken)) {
+          is ProviderResult.Success -> {
+            val cur = prefs.getTelegramConfigOnce()
+            prefs.saveTelegramConfig(cur.copy(botToken = botToken.trim(), chatId = res.data))
+            _statusMessages.emit(UiText.Resource(R.string.msg_telegram_chat_detected, listOf(res.data)))
+          }
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
         }
-        is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
       }
-      _isBusy.value = false
     }
   }
 
@@ -136,36 +151,36 @@ constructor(
 
   fun testDiscordConnection() {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = discordProvider.testConnection()) {
-        is ProviderResult.Success -> _statusMessages.emit(UiText.Dynamic(res.data))
-        is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+      runBusyAction {
+        when (val res = discordProvider.testConnection()) {
+          is ProviderResult.Success -> _statusMessages.emit(UiText.Dynamic(res.data))
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+        }
       }
-      _isBusy.value = false
     }
   }
 
   fun connectGoogleDrive(includeVisibleFolderScope: Boolean) {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val auth = driveAuthHelper.requestAuthorization(includeVisibleFolderScope)) {
-        is DriveAuthState.Authorized -> verifyDriveAfterAuth()
-        is DriveAuthState.NeedsUserConsent -> _pendingConsentIntent.emit(auth.pendingIntent)
-        is DriveAuthState.Failed -> _statusMessages.emit(UiText.Dynamic(auth.message))
+      runBusyAction {
+        when (val auth = driveAuthHelper.requestAuthorization(includeVisibleFolderScope)) {
+          is DriveAuthState.Authorized -> verifyDriveAfterAuth()
+          is DriveAuthState.NeedsUserConsent -> _pendingConsentIntent.emit(auth.pendingIntent)
+          is DriveAuthState.Failed -> _statusMessages.emit(UiText.Dynamic(auth.message))
+        }
       }
-      _isBusy.value = false
     }
   }
 
   fun onDriveConsentResult(intent: Intent?) {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = driveAuthHelper.handleAuthorizationResultIntent(intent)) {
-        is DriveAuthState.Authorized -> verifyDriveAfterAuth()
-        is DriveAuthState.Failed -> _statusMessages.emit(UiText.Dynamic(res.message))
-        is DriveAuthState.NeedsUserConsent -> Unit
+      runBusyAction {
+        when (val res = driveAuthHelper.handleAuthorizationResultIntent(intent)) {
+          is DriveAuthState.Authorized -> verifyDriveAfterAuth()
+          is DriveAuthState.Failed -> _statusMessages.emit(UiText.Dynamic(res.message))
+          is DriveAuthState.NeedsUserConsent -> Unit
+        }
       }
-      _isBusy.value = false
     }
   }
 
@@ -173,7 +188,10 @@ constructor(
     when (val testRes = googleDriveProvider.testConnection()) {
       is ProviderResult.Success -> {
         _statusMessages.emit(UiText.Dynamic(testRes.data))
-        refreshDriveBackups()
+        when (val backups = googleDriveProvider.listBackups()) {
+          is ProviderResult.Success -> _driveBackups.value = backups.data
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(backups.message))
+        }
       }
       is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(testRes.message))
     }
@@ -198,105 +216,130 @@ constructor(
 
   fun refreshDriveBackups() {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = googleDriveProvider.listBackups()) {
-        is ProviderResult.Success -> _driveBackups.value = res.data
-        is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+      runBusyAction {
+        when (val res = googleDriveProvider.listBackups()) {
+          is ProviderResult.Success -> _driveBackups.value = res.data
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+        }
       }
-      _isBusy.value = false
     }
   }
 
   fun loadDriveFolders() {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = googleDriveProvider.fetchDriveFolders()) {
-        is ProviderResult.Success -> _driveFolders.value = res.data
-        is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+      runBusyAction {
+        when (val res = googleDriveProvider.fetchDriveFolders()) {
+          is ProviderResult.Success -> _driveFolders.value = res.data
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+        }
       }
-      _isBusy.value = false
     }
   }
 
   fun createDriveBackupFolder(name: String) {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = googleDriveProvider.createBackupFolder(name)) {
-        is ProviderResult.Success -> {
-          _statusMessages.emit(
-            UiText.Resource(R.string.msg_drive_folder_created, listOf(res.data.name))
-          )
-          loadDriveFolders()
+      runBusyAction {
+        when (val res = googleDriveProvider.createBackupFolder(name)) {
+          is ProviderResult.Success -> {
+            _statusMessages.emit(
+              UiText.Resource(R.string.msg_drive_folder_created, listOf(res.data.name))
+            )
+            when (val folders = googleDriveProvider.fetchDriveFolders()) {
+              is ProviderResult.Success -> _driveFolders.value = folders.data
+              is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(folders.message))
+            }
+          }
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
         }
-        is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
       }
-      _isBusy.value = false
     }
   }
 
   fun backupToDriveNow(passphrase: String?) {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = googleDriveProvider.backupNow(passphrase)) {
-        is ProviderResult.Success -> {
-          _statusMessages.emit(
-            UiText.Resource(R.string.msg_drive_backup_saved, listOf(res.detail))
-          )
-          refreshDriveBackups()
+      runBusyAction {
+        when (val res = googleDriveProvider.backupNow(passphrase)) {
+          is ProviderResult.Success -> {
+            _statusMessages.emit(
+              UiText.Resource(R.string.msg_drive_backup_saved, listOf(res.detail))
+            )
+            when (val backups = googleDriveProvider.listBackups()) {
+              is ProviderResult.Success -> _driveBackups.value = backups.data
+              is ProviderResult.Error -> Unit
+            }
+          }
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
         }
-        is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
       }
-      _isBusy.value = false
     }
   }
 
   fun restoreFromDrive(fileId: String, passphrase: String?) {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = googleDriveProvider.restoreBackup(fileId, passphrase)) {
-        is ProviderResult.Success -> {
-          val s = res.data
-          _statusMessages.emit(
-            UiText.Resource(
-              R.string.msg_restore_summary,
-              listOf(s.importedCount, s.deduplicatedCount, s.checksumVerified.toString()),
+      runBusyAction {
+        when (val res = googleDriveProvider.restoreBackup(fileId, passphrase)) {
+          is ProviderResult.Success -> {
+            val s = res.data
+            _statusMessages.emit(
+              UiText.Resource(
+                R.string.msg_restore_summary,
+                listOf(s.importedCount, s.deduplicatedCount, s.checksumVerified.toString()),
+              )
             )
-          )
+          }
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
         }
-        is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
       }
-      _isBusy.value = false
     }
   }
 
   fun syncAllNow() {
+    if (syncEngine.state.value.isSyncing || _isBusy.value) return
     viewModelScope.launch {
-      syncEngine.syncAll()
-      _statusMessages.emit(UiText.Dynamic(syncEngine.state.value.lastMessage))
+      _isBusy.value = true
+      try {
+        syncEngine.syncAll()
+        val msg = syncEngine.state.value.lastMessage
+        if (msg.isNotBlank()) {
+          _statusMessages.emit(UiText.Dynamic(msg))
+        }
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (e: Exception) {
+        _statusMessages.tryEmit(UiText.Dynamic(e.localizedMessage ?: "Sync error"))
+      } finally {
+        _isBusy.value = false
+      }
     }
   }
 
   fun syncProviderNow(providerId: SyncProviderId) {
     viewModelScope.launch {
-      _isBusy.value = true
-      when (val res = syncEngine.syncSingleProvider(providerId)) {
-        is ProviderResult.Success ->
-          _statusMessages.emit(UiText.Dynamic("${providerId.displayName}: ${res.data}"))
-        is ProviderResult.Error ->
-          _statusMessages.emit(UiText.Dynamic("${providerId.displayName}: ${res.message}"))
+      runBusyAction {
+        when (val res = syncEngine.syncSingleProvider(providerId)) {
+          is ProviderResult.Success ->
+            _statusMessages.emit(UiText.Dynamic("${providerId.displayName}: ${res.data}"))
+          is ProviderResult.Error ->
+            _statusMessages.emit(UiText.Dynamic("${providerId.displayName}: ${res.message}"))
+        }
       }
-      _isBusy.value = false
     }
   }
 
   fun toggleAutoSync(enabled: Boolean, intervalHours: Int = 6) {
     viewModelScope.launch {
-      prefs.updateAutoSync(enabled, intervalHours)
-      syncEngine.schedulePeriodicSync(enabled, intervalHours)
-      _statusMessages.emit(
-        if (enabled) UiText.Resource(R.string.msg_autosync_scheduled, listOf(intervalHours))
-        else UiText.Resource(R.string.msg_autosync_paused)
-      )
+      try {
+        prefs.updateAutoSync(enabled, intervalHours)
+        syncEngine.schedulePeriodicSync(enabled, intervalHours)
+        _statusMessages.emit(
+          if (enabled) UiText.Resource(R.string.msg_autosync_scheduled, listOf(intervalHours))
+          else UiText.Resource(R.string.msg_autosync_paused)
+        )
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (e: Exception) {
+        _statusMessages.tryEmit(UiText.Dynamic(e.localizedMessage ?: "Auto-sync update failed"))
+      }
     }
   }
 
@@ -317,22 +360,23 @@ constructor(
 
   fun restoreLocalFile(rawContent: String, passphrase: String?) {
     viewModelScope.launch {
-      _isBusy.value = true
-      runCatching { exportImportUseCase.restoreFromRawContent(rawContent, passphrase) }
-        .onSuccess { s ->
-          _statusMessages.emit(
-            UiText.Resource(
-              R.string.msg_restore_summary,
-              listOf(s.importedCount, s.deduplicatedCount, s.checksumVerified.toString()),
+      runBusyAction {
+        runCatching { exportImportUseCase.restoreFromRawContent(rawContent, passphrase) }
+          .onSuccess { s ->
+            _statusMessages.emit(
+              UiText.Resource(
+                R.string.msg_restore_summary,
+                listOf(s.importedCount, s.deduplicatedCount, s.checksumVerified.toString()),
+              )
             )
-          )
-        }
-        .onFailure { e ->
-          _statusMessages.emit(
-            UiText.Resource(R.string.msg_restore_failed, listOf(e.localizedMessage ?: ""))
-          )
-        }
-      _isBusy.value = false
+          }
+          .onFailure { e ->
+            if (e is CancellationException) throw e
+            _statusMessages.emit(
+              UiText.Resource(R.string.msg_restore_failed, listOf(e.localizedMessage ?: ""))
+            )
+          }
+      }
     }
   }
 }

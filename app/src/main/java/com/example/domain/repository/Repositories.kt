@@ -44,6 +44,8 @@ interface ClipRepository {
 
   suspend fun updateClip(clip: ClipItem)
 
+  suspend fun updateRemoteId(id: Long, remoteId: String)
+
   suspend fun setPinned(id: Long, pinned: Boolean)
 
   suspend fun setFavorite(id: Long, favorite: Boolean)

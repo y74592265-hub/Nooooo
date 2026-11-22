@@ -22,6 +22,9 @@ import com.example.domain.usecase.SmartSearchUseCase
 import com.example.integrations.ProviderResult
 import com.example.ui.components.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -30,9 +33,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -82,10 +88,15 @@ constructor(
   private val _searchFilter = MutableStateFlow(SearchFilter())
   val searchFilter: StateFlow<SearchFilter> = _searchFilter.asStateFlow()
 
+  @OptIn(FlowPreview::class)
   val searchResults: StateFlow<List<ClipItem>> =
-    combine(activeClips, _searchFilter) { clips, filter ->
+    combine(
+        activeClips,
+        _searchFilter.debounce { if (it.query.isNotBlank()) 120L else 0L },
+      ) { clips, filter ->
         smartSearchUseCase(clips, filter)
       }
+      .flowOn(Dispatchers.Default)
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
   private val _selectedClipIds = MutableStateFlow<Set<Long>>(emptySet())
@@ -94,19 +105,23 @@ constructor(
   private val _detectedClipboardText = MutableStateFlow<String?>(null)
   val detectedClipboardText: StateFlow<String?> = _detectedClipboardText.asStateFlow()
 
-  private val _snackbarEvents = MutableSharedFlow<UiText>()
+  private val _snackbarEvents = MutableSharedFlow<UiText>(extraBufferCapacity = 8)
   val snackbarEvents: SharedFlow<UiText> = _snackbarEvents.asSharedFlow()
+
+  @Volatile private var lastObservedClipboardText: String? = null
 
   fun observeClip(clipId: Long) = clipRepository.observeClipById(clipId)
 
   fun readSystemClipboardNow(): String? = clipboardHelper.readCurrentClipboardText()
 
   fun onAppWindowFocused() {
+    val currentText = clipboardHelper.readCurrentClipboardText() ?: return
+    if (currentText == lastObservedClipboardText) return
+    lastObservedClipboardText = currentText
     viewModelScope.launch {
       val settings = prefs.userSettings.first()
       if (!settings.autoCaptureOnForeground) return@launch
-      val currentText = clipboardHelper.readCurrentClipboardText() ?: return@launch
-      val hash = cryptoManager.sha256(currentText)
+      val hash = withContext(Dispatchers.Default) { cryptoManager.sha256(currentText) }
       if (hash != settings.lastDetectedClipHash) {
         _detectedClipboardText.value = currentText
       }
@@ -299,10 +314,16 @@ constructor(
 
   fun pushSingleClipToProvider(clip: ClipItem, providerId: SyncProviderId) {
     viewModelScope.launch {
-      when (val res = syncEngine.syncSingleProvider(providerId)) {
-        is ProviderResult.Success ->
-          _snackbarEvents.emit(UiText.Dynamic("${providerId.displayName}: ${res.data}"))
-        is ProviderResult.Error -> _snackbarEvents.emit(UiText.Dynamic(res.message))
+      try {
+        when (val res = syncEngine.pushSingleClip(clip, providerId)) {
+          is ProviderResult.Success ->
+            _snackbarEvents.emit(UiText.Dynamic("${providerId.displayName}: ${res.data}"))
+          is ProviderResult.Error -> _snackbarEvents.emit(UiText.Dynamic(res.message))
+        }
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (e: Exception) {
+        _snackbarEvents.tryEmit(UiText.Dynamic(e.localizedMessage ?: "Push failed"))
       }
     }
   }

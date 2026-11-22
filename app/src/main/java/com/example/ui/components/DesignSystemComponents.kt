@@ -198,6 +198,27 @@ fun localizedSortOrderLabel(order: SearchSortOrder): String =
     SearchSortOrder.OLDEST -> stringResource(R.string.sort_oldest)
   }
 
+private val shortDateFormatter =
+  object : ThreadLocal<Pair<String, SimpleDateFormat>>() {
+    override fun initialValue(): Pair<String, SimpleDateFormat> {
+      val locale = Locale.getDefault()
+      return locale.toLanguageTag() to SimpleDateFormat("MMM d", locale)
+    }
+  }
+
+private fun formatShortDate(timestamp: Long): String {
+  val locale = Locale.getDefault()
+  val tag = locale.toLanguageTag()
+  val cached = shortDateFormatter.get()
+  val fmt =
+    if (cached != null && cached.first == tag) {
+      cached.second
+    } else {
+      SimpleDateFormat("MMM d", locale).also { shortDateFormatter.set(tag to it) }
+    }
+  return fmt.format(Date(timestamp))
+}
+
 @Composable
 fun localizedRelativeTime(timestamp: Long): String {
   val diff = (System.currentTimeMillis() - timestamp).coerceAtLeast(0L)
@@ -205,7 +226,7 @@ fun localizedRelativeTime(timestamp: Long): String {
     diff < 60_000L -> stringResource(R.string.time_now)
     diff < 3_600_000L -> stringResource(R.string.time_minutes_ago, (diff / 60_000L).toInt())
     diff < 86_400_000L -> stringResource(R.string.time_hours_ago, (diff / 3_600_000L).toInt())
-    else -> SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(timestamp))
+    else -> formatShortDate(timestamp)
   }
 }
 

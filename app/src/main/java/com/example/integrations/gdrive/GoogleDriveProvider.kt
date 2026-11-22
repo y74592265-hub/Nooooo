@@ -8,6 +8,7 @@ import com.example.domain.usecase.RestoreSummary
 import com.example.integrations.IntegrationProvider
 import com.example.integrations.ProviderResult
 import com.example.integrations.PulledClip
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -67,10 +68,12 @@ constructor(
           cfg.copy(enabled = true, accountEmail = email, lastStatus = "Connected ($email)")
         )
         ProviderResult.Success("Connected to Google Drive ($email)")
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error reaching Google Drive", isRetryable = true)
       } catch (e: Exception) {
-        ProviderResult.Error("Drive check failed: ${e.localizedMessage}")
+        ProviderResult.Error("Drive check failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
@@ -107,8 +110,12 @@ constructor(
           return@withContext ProviderResult.Error("Could not list Drive folders (HTTP ${resp.code()})")
         }
         ProviderResult.Success(resp.body()?.files.orEmpty())
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error listing folders", isRetryable = true)
+      } catch (e: Exception) {
+        ProviderResult.Error("Could not list Drive folders: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
@@ -131,8 +138,12 @@ constructor(
           )
         )
         ProviderResult.Success(folder)
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error creating folder", isRetryable = true)
+      } catch (e: Exception) {
+        ProviderResult.Error("Failed to create Drive folder: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
@@ -157,8 +168,12 @@ constructor(
           return@withContext ProviderResult.Error("Failed to list backups (HTTP ${resp.code()})")
         }
         ProviderResult.Success(resp.body()?.files.orEmpty())
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error listing backups", isRetryable = true)
+      } catch (e: Exception) {
+        ProviderResult.Error("Failed to list backups: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
@@ -213,10 +228,12 @@ constructor(
           )
         )
         ProviderResult.Success(uploaded, detail = fileName)
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error uploading backup", isRetryable = true)
       } catch (e: Exception) {
-        ProviderResult.Error("Backup failed: ${e.localizedMessage}")
+        ProviderResult.Error("Backup failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
@@ -233,10 +250,12 @@ constructor(
         val raw = resp.body()!!.string()
         val summary = exportImportUseCase.restoreFromRawContent(raw, passphrase)
         ProviderResult.Success(summary)
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error downloading backup", isRetryable = true)
       } catch (e: Exception) {
-        ProviderResult.Error("Restore failed: ${e.localizedMessage}")
+        ProviderResult.Error("Restore failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 }

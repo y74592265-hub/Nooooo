@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -272,7 +275,8 @@ fun ClipDetailsScreen(
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, clip.content)
               }
-            context.startActivity(Intent.createChooser(sendIntent, shareTitle))
+            val chooser = Intent.createChooser(sendIntent, shareTitle)
+            runCatching { startActivitySafely(context, chooser) }
           },
           modifier = Modifier.testTag("details_share_btn"),
         ) {
@@ -287,7 +291,7 @@ fun ClipDetailsScreen(
               val url =
                 if (clip.content.startsWith("http")) clip.content.trim()
                 else "https://${clip.content.trim()}"
-              runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+              runCatching { startActivitySafely(context, Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
             }
           ) {
             Icon(Icons.AutoMirrored.Filled.OpenInNew, null, Modifier.size(16.dp))
@@ -397,4 +401,17 @@ private fun MetadataRow(label: String, value: String, mono: Boolean = false) {
       color = MaterialTheme.colorScheme.onSurface,
     )
   }
+}
+
+private fun startActivitySafely(context: Context, intent: Intent) {
+  var cur: Context? = context
+  while (cur is ContextWrapper) {
+    if (cur is Activity) {
+      cur.startActivity(intent)
+      return
+    }
+    cur = cur.baseContext
+  }
+  intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+  context.startActivity(intent)
 }

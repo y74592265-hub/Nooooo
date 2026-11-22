@@ -59,8 +59,8 @@ object AppModule {
   fun provideOkHttpClient(): OkHttpClient {
     val logging =
       HttpLoggingInterceptor().apply {
-        // Never log full URLs/bodies or Auth headers containing Bot/OAuth tokens
-        level = HttpLoggingInterceptor.Level.BASIC
+        // Strictly disabled so Telegram Bot tokens, Discord Webhooks, and OAuth headers never hit Logcat
+        level = HttpLoggingInterceptor.Level.NONE
         redactHeader("Authorization")
       }
     return OkHttpClient.Builder()

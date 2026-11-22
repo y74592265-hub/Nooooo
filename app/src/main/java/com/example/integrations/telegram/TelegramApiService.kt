@@ -55,16 +55,16 @@ data class TelegramSendMessageRequest(
 )
 
 interface TelegramApiService {
-  @GET("bot{token}/getMe")
+  @GET("/bot{token}/getMe")
   suspend fun getMe(@Path("token") token: String): Response<TelegramResponse<TelegramUser>>
 
-  @POST("bot{token}/sendMessage")
+  @POST("/bot{token}/sendMessage")
   suspend fun sendMessage(
     @Path("token") token: String,
     @Body body: TelegramSendMessageRequest,
   ): Response<TelegramResponse<TelegramMessage>>
 
-  @GET("bot{token}/getUpdates")
+  @GET("/bot{token}/getUpdates")
   suspend fun getUpdates(
     @Path("token") token: String,
     @Query("offset") offset: Long? = null,

@@ -21,6 +21,7 @@ import com.example.domain.repository.SaveClipResult
 import com.example.domain.repository.SyncLogRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -36,19 +37,19 @@ constructor(
 ) : ClipRepository {
 
   override fun observeActiveClips(): Flow<List<ClipItem>> =
-    clipDao.observeActiveClips().map { list -> list.map { it.toDomain() } }
+    clipDao.observeActiveClips().map { list -> list.map { it.toDomain() } }.flowOn(Dispatchers.Default)
 
   override fun observeFavoriteClips(): Flow<List<ClipItem>> =
-    clipDao.observeFavoriteClips().map { list -> list.map { it.toDomain() } }
+    clipDao.observeFavoriteClips().map { list -> list.map { it.toDomain() } }.flowOn(Dispatchers.Default)
 
   override fun observeTrashedClips(): Flow<List<ClipItem>> =
-    clipDao.observeTrashedClips().map { list -> list.map { it.toDomain() } }
+    clipDao.observeTrashedClips().map { list -> list.map { it.toDomain() } }.flowOn(Dispatchers.Default)
 
   override fun observeClipsByCategory(categoryId: Long): Flow<List<ClipItem>> =
-    clipDao.observeClipsByCategory(categoryId).map { list -> list.map { it.toDomain() } }
+    clipDao.observeClipsByCategory(categoryId).map { list -> list.map { it.toDomain() } }.flowOn(Dispatchers.Default)
 
   override fun observeClipById(id: Long): Flow<ClipItem?> =
-    clipDao.observeClipById(id).map { it?.toDomain() }
+    clipDao.observeClipById(id).map { it?.toDomain() }.flowOn(Dispatchers.Default)
 
   override suspend fun getClipById(id: Long): ClipItem? =
     withContext(Dispatchers.IO) { clipDao.getClipById(id)?.toDomain() }
@@ -155,6 +156,9 @@ constructor(
       clipDao.updateClip(entity)
     }
 
+  override suspend fun updateRemoteId(id: Long, remoteId: String) =
+    withContext(Dispatchers.IO) { clipDao.updateRemoteId(id, remoteId) }
+
   override suspend fun setPinned(id: Long, pinned: Boolean) =
     withContext(Dispatchers.IO) { clipDao.setPinned(id, pinned, System.currentTimeMillis()) }
 
@@ -195,6 +199,9 @@ constructor(
 
   private fun ClipEntity.toDomain(): ClipItem {
     val plain = if (isSensitive) cryptoManager.decryptLocal(content) else content
+    val parsedTags =
+      if (tagsCsv.isBlank()) emptyList()
+      else tagsCsv.split(",").mapNotNull { it.trim().takeIf(String::isNotEmpty) }
     return ClipItem(
       id = id,
       title = title,
@@ -202,7 +209,7 @@ constructor(
       contentHash = contentHash,
       contentType = contentType,
       categoryId = categoryId,
-      tags = tagsCsv.split(",").map { it.trim() }.filter { it.isNotEmpty() },
+      tags = parsedTags,
       isPinned = isPinned,
       isFavorite = isFavorite,
       isSensitive = isSensitive,
@@ -221,19 +228,22 @@ class CategoryRepositoryImpl @Inject constructor(private val categoryDao: Catego
   CategoryRepository {
 
   override fun observeCategories(): Flow<List<Category>> =
-    categoryDao.observeCategoriesWithCount().map { rows ->
-      rows.map {
-        Category(
-          id = it.id,
-          name = it.name,
-          colorHex = it.colorHex,
-          iconKey = it.iconKey,
-          isDefault = it.isDefault,
-          sortOrder = it.sortOrder,
-          clipCount = it.clipCount,
-        )
+    categoryDao
+      .observeCategoriesWithCount()
+      .map { rows ->
+        rows.map {
+          Category(
+            id = it.id,
+            name = it.name,
+            colorHex = it.colorHex,
+            iconKey = it.iconKey,
+            isDefault = it.isDefault,
+            sortOrder = it.sortOrder,
+            clipCount = it.clipCount,
+          )
+        }
       }
-    }
+      .flowOn(Dispatchers.Default)
 
   override suspend fun ensureDefaultCategories() =
     withContext(Dispatchers.IO) {
@@ -296,19 +306,22 @@ class SyncLogRepositoryImpl @Inject constructor(private val syncLogDao: SyncLogD
   SyncLogRepository {
 
   override fun observeRecentLogs(): Flow<List<SyncLog>> =
-    syncLogDao.observeRecentLogs().map { rows ->
-      rows.map {
-        SyncLog(
-          id = it.id,
-          provider = it.provider,
-          direction = it.direction,
-          status = it.status,
-          message = it.message,
-          itemsCount = it.itemsCount,
-          timestamp = it.timestamp,
-        )
+    syncLogDao
+      .observeRecentLogs()
+      .map { rows ->
+        rows.map {
+          SyncLog(
+            id = it.id,
+            provider = it.provider,
+            direction = it.direction,
+            status = it.status,
+            message = it.message,
+            itemsCount = it.itemsCount,
+            timestamp = it.timestamp,
+          )
+        }
       }
-    }
+      .flowOn(Dispatchers.Default)
 
   override suspend fun addLog(log: SyncLog) =
     withContext(Dispatchers.IO) {

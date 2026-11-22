@@ -32,27 +32,37 @@ class KeystoreCryptoManager @Inject constructor() {
     private const val GCM_IV_LENGTH_BYTES = 12
     private const val ENC_PREFIX = "enc_v1:"
     private const val PBKDF2_ITERATIONS = 100_000
+    private val HEX_CHARS = "0123456789abcdef".toCharArray()
   }
 
-  private fun getOrCreateMasterKey(): SecretKey {
-    val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-    val existing = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
-    if (existing != null) return existing
+  @Volatile private var cachedMasterKey: SecretKey? = null
 
-    val keyGenerator =
-      javax.crypto.KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-    val spec =
-      KeyGenParameterSpec.Builder(
-          KEY_ALIAS,
-          KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
-        )
-        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-        .setKeySize(256)
-        .setRandomizedEncryptionRequired(true)
-        .build()
-    keyGenerator.init(spec)
-    return keyGenerator.generateKey()
+  private fun getOrCreateMasterKey(): SecretKey {
+    cachedMasterKey?.let { return it }
+    return synchronized(this) {
+      cachedMasterKey?.let { return@synchronized it }
+      val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+      val existing = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+      if (existing != null) {
+        cachedMasterKey = existing
+        return@synchronized existing
+      }
+
+      val keyGenerator =
+        javax.crypto.KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+      val spec =
+        KeyGenParameterSpec.Builder(
+            KEY_ALIAS,
+            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+          )
+          .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+          .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+          .setKeySize(256)
+          .setRandomizedEncryptionRequired(true)
+          .build()
+      keyGenerator.init(spec)
+      keyGenerator.generateKey().also { cachedMasterKey = it }
+    }
   }
 
   fun encryptLocal(plainText: String): String {
@@ -93,7 +103,13 @@ class KeystoreCryptoManager @Inject constructor() {
   fun sha256(input: String): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val bytes = digest.digest(input.trim().toByteArray(StandardCharsets.UTF_8))
-    return bytes.joinToString("") { "%02x".format(it) }
+    val chars = CharArray(bytes.size * 2)
+    for (i in bytes.indices) {
+      val v = bytes[i].toInt() and 0xFF
+      chars[i * 2] = HEX_CHARS[v ushr 4]
+      chars[i * 2 + 1] = HEX_CHARS[v and 0x0F]
+    }
+    return String(chars)
   }
 
   fun encryptPortableBackup(plainJson: String, passphrase: String): EncryptedBackupEnvelope {

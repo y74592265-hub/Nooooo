@@ -8,6 +8,7 @@ import com.example.core.preferences.AppPreferencesRepository
 import com.example.domain.repository.ClipRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 
 @HiltWorker
@@ -22,17 +23,23 @@ constructor(
 ) : CoroutineWorker(appContext, params) {
 
   override suspend fun doWork(): Result {
-    val settings = prefs.userSettings.first()
-    if (settings.historyRetentionDays > 0) {
-      clipRepository.purgeExpiredHistory(settings.historyRetentionDays)
-    }
-    val completedWithoutRetryableError = syncEngine.syncAll()
-    return if (completedWithoutRetryableError) {
-      Result.success()
-    } else if (runAttemptCount < 4) {
-      Result.retry()
-    } else {
-      Result.failure()
+    return try {
+      val settings = prefs.userSettings.first()
+      if (settings.historyRetentionDays > 0) {
+        clipRepository.purgeExpiredHistory(settings.historyRetentionDays)
+      }
+      val completedWithoutRetryableError = syncEngine.syncAll()
+      if (completedWithoutRetryableError) {
+        Result.success()
+      } else if (runAttemptCount < 4) {
+        Result.retry()
+      } else {
+        Result.failure()
+      }
+    } catch (ce: CancellationException) {
+      throw ce
+    } catch (_: Exception) {
+      if (runAttemptCount < 4) Result.retry() else Result.failure()
     }
   }
 }

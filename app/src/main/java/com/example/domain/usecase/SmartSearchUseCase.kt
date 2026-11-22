@@ -33,7 +33,7 @@ class SmartSearchUseCase @Inject constructor() {
     filter: SearchFilter,
     nowMillis: Long = System.currentTimeMillis(),
   ): List<ClipItem> {
-    val q = filter.query.trim().lowercase()
+    val q = filter.query.trim()
     val minTimestamp =
       when (filter.dateFilter) {
         DateFilter.ALL -> 0L
@@ -44,20 +44,19 @@ class SmartSearchUseCase @Inject constructor() {
 
     val filtered =
       clips.filter { clip ->
-        val matchesCategory = filter.categoryId == null || clip.categoryId == filter.categoryId
-        val matchesType = filter.contentType == null || clip.contentType == filter.contentType
-        val matchesDate = clip.updatedAt >= minTimestamp
-        val matchesFav = !filter.favoritesOnly || clip.isFavorite
-        val matchesQuery =
-          q.isEmpty() ||
-            clip.title.lowercase().contains(q) ||
-            clip.content.lowercase().contains(q) ||
-            clip.tags.any { it.lowercase().contains(q) }
-        matchesCategory && matchesType && matchesDate && matchesFav && matchesQuery
+        if (filter.categoryId != null && clip.categoryId != filter.categoryId) return@filter false
+        if (filter.contentType != null && clip.contentType != filter.contentType) return@filter false
+        if (clip.updatedAt < minTimestamp) return@filter false
+        if (filter.favoritesOnly && !clip.isFavorite) return@filter false
+        if (q.isEmpty()) return@filter true
+        clip.title.contains(q, ignoreCase = true) ||
+          clip.content.contains(q, ignoreCase = true) ||
+          clip.tags.any { it.contains(q, ignoreCase = true) }
       }
 
     return when (filter.sortOrder) {
-      SearchSortOrder.NEWEST -> filtered.sortedWith(compareByDescending<ClipItem> { it.isPinned }.thenByDescending { it.updatedAt })
+      SearchSortOrder.NEWEST ->
+        filtered.sortedWith(compareByDescending<ClipItem> { it.isPinned }.thenByDescending { it.updatedAt })
       SearchSortOrder.OLDEST -> filtered.sortedBy { it.updatedAt }
       SearchSortOrder.RELEVANCE -> {
         if (q.isEmpty()) {
@@ -73,19 +72,17 @@ class SmartSearchUseCase @Inject constructor() {
     }
   }
 
-  private fun scoreRelevance(clip: ClipItem, queryLower: String): Int {
+  private fun scoreRelevance(clip: ClipItem, query: String): Int {
     var score = 0
-    val titleLower = clip.title.lowercase()
-    val contentLower = clip.content.lowercase()
-    if (titleLower == queryLower) score += 100
-    else if (titleLower.startsWith(queryLower)) score += 70
-    else if (titleLower.contains(queryLower)) score += 45
+    if (clip.title.equals(query, ignoreCase = true)) score += 100
+    else if (clip.title.startsWith(query, ignoreCase = true)) score += 70
+    else if (clip.title.contains(query, ignoreCase = true)) score += 45
 
-    if (clip.tags.any { it.lowercase() == queryLower }) score += 60
-    else if (clip.tags.any { it.lowercase().contains(queryLower) }) score += 30
+    if (clip.tags.any { it.equals(query, ignoreCase = true) }) score += 60
+    else if (clip.tags.any { it.contains(query, ignoreCase = true) }) score += 30
 
-    if (contentLower.startsWith(queryLower)) score += 40
-    else if (contentLower.contains(queryLower)) score += 20
+    if (clip.content.startsWith(query, ignoreCase = true)) score += 40
+    else if (clip.content.contains(query, ignoreCase = true)) score += 20
 
     if (clip.isPinned) score += 10
     if (clip.isFavorite) score += 5

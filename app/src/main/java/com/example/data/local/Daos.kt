@@ -53,6 +53,9 @@ interface ClipDao {
   @Query("UPDATE clips SET isFavorite = :favorite, updatedAt = :updatedAt WHERE id = :id")
   suspend fun setFavorite(id: Long, favorite: Boolean, updatedAt: Long)
 
+  @Query("UPDATE clips SET remoteId = :remoteId WHERE id = :id")
+  suspend fun updateRemoteId(id: Long, remoteId: String)
+
   @Query("UPDATE clips SET categoryId = :categoryId, updatedAt = :updatedAt WHERE id IN (:ids)")
   suspend fun moveClipsToCategory(ids: List<Long>, categoryId: Long, updatedAt: Long)
 

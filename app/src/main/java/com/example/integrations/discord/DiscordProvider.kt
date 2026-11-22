@@ -8,8 +8,10 @@ import com.example.domain.repository.CategoryRepository
 import com.example.integrations.IntegrationProvider
 import com.example.integrations.ProviderResult
 import com.example.integrations.PulledClip
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,8 +36,16 @@ constructor(
   override suspend fun isConfigured(): Boolean {
     val cfg = prefs.getDiscordConfigOnce()
     val hasOutgoing =
-      isValidWebhookUrl(cfg.webhookUrl) || (cfg.botToken.isNotBlank() && cfg.channelId.isNotBlank())
+      isValidWebhookUrl(cfg.webhookUrl) ||
+        (sanitizeHeaderToken(cfg.botToken) != null && cfg.channelId.isNotBlank())
     return cfg.enabled && hasOutgoing
+  }
+
+  private fun sanitizeHeaderToken(raw: String): String? {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return null
+    if (trimmed.any { it.code < 0x20 || it.code >= 0x7F }) return null
+    return trimmed
   }
 
   override suspend fun testConnection(): ProviderResult<String> =
@@ -65,7 +75,10 @@ constructor(
         }
 
         if (botToken.isNotEmpty() && channelId.isNotEmpty()) {
-          val chResp = api.getChannel("Bot $botToken", channelId)
+          val safeBotToken =
+            sanitizeHeaderToken(botToken)
+              ?: return@withContext ProviderResult.Error("Discord Bot Token contains invalid characters.")
+          val chResp = api.getChannel("Bot $safeBotToken", channelId)
           if (!chResp.isSuccessful) {
             return@withContext ProviderResult.Error(
               "Bot channel check failed (HTTP ${chResp.code()}). Verify Bot Token & permissions."
@@ -78,10 +91,12 @@ constructor(
         val summary = statuses.joinToString(" • ")
         prefs.saveDiscordConfig(cfg.copy(lastStatus = summary))
         ProviderResult.Success(summary)
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error reaching Discord: ${e.localizedMessage}", isRetryable = true)
       } catch (e: Exception) {
-        ProviderResult.Error("Discord test failed: ${e.localizedMessage}")
+        ProviderResult.Error("Discord test failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
@@ -93,7 +108,8 @@ constructor(
       val botToken = cfg.botToken.trim()
       val channelId = cfg.channelId.trim()
 
-      if (!isValidWebhookUrl(webhook) && (botToken.isEmpty() || channelId.isEmpty())) {
+      val safeBotToken = sanitizeHeaderToken(botToken)
+      if (!isValidWebhookUrl(webhook) && (safeBotToken == null || channelId.isEmpty())) {
         return@withContext ProviderResult.Error("No valid Discord outgoing Webhook or Bot channel configured.")
       }
 
@@ -111,7 +127,7 @@ constructor(
               } else {
                 api
                   .sendChannelMessage(
-                    "Bot $botToken",
+                    "Bot ${safeBotToken!!}",
                     channelId,
                     DiscordMessageRequest(content = chunk),
                   )
@@ -130,10 +146,12 @@ constructor(
           cfg.copy(lastSyncAt = System.currentTimeMillis(), lastStatus = "Pushed $sentCount clips")
         )
         ProviderResult.Success(sentCount)
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error sending to Discord", isRetryable = true)
       } catch (e: Exception) {
-        ProviderResult.Error("Discord push failed: ${e.localizedMessage}")
+        ProviderResult.Error("Discord push failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
@@ -141,10 +159,10 @@ constructor(
     withContext(Dispatchers.IO) {
       val cfg = prefs.getDiscordConfigOnce()
       if (!cfg.enabled) return@withContext ProviderResult.Error("Discord integration is disabled.")
-      val botToken = cfg.botToken.trim()
+      val safeBotToken = sanitizeHeaderToken(cfg.botToken)
       val channelId = cfg.channelId.trim()
       // Webhooks cannot read messages — return empty cleanly if only webhook is configured
-      if (botToken.isEmpty() || channelId.isEmpty()) {
+      if (safeBotToken == null || channelId.isEmpty()) {
         return@withContext ProviderResult.Success(
           emptyList(),
           detail = "Bot Token + Channel ID required for incoming messages",
@@ -153,7 +171,7 @@ constructor(
       try {
         val resp =
           api.getChannelMessages(
-            botAuthorization = "Bot $botToken",
+            botAuthorization = "Bot $safeBotToken",
             channelId = channelId,
             afterMessageId = cfg.lastMessageId,
             limit = 25,
@@ -185,17 +203,23 @@ constructor(
           )
         )
         ProviderResult.Success(pulled)
+      } catch (ce: CancellationException) {
+        throw ce
       } catch (e: IOException) {
         ProviderResult.Error("Network error pulling Discord messages", isRetryable = true)
       } catch (e: Exception) {
-        ProviderResult.Error("Discord pull failed: ${e.localizedMessage}")
+        ProviderResult.Error("Discord pull failed: ${e.localizedMessage ?: "Unexpected error"}")
       }
     }
 
   private fun isValidWebhookUrl(url: String): Boolean {
     val trimmed = url.trim()
-    return trimmed.startsWith("https://discord.com/api/webhooks/") ||
-      trimmed.startsWith("https://discordapp.com/api/webhooks/")
+    if (trimmed.isEmpty() || trimmed.any { it.isWhitespace() || it.code < 0x20 }) return false
+    val parsed = trimmed.toHttpUrlOrNull() ?: return false
+    if (!parsed.isHttps) return false
+    val allowedHosts = setOf("discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com")
+    if (parsed.host.lowercase() !in allowedHosts) return false
+    return parsed.encodedPath.startsWith("/api/webhooks/")
   }
 
   private fun buildDiscordMessage(clip: ClipItem, categoryName: String): String {

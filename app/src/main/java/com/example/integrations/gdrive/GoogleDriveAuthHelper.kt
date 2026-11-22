@@ -9,6 +9,7 @@ import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.api.Scope
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -42,56 +43,71 @@ class GoogleDriveAuthHelper @Inject constructor(@ApplicationContext private val 
   }
 
   suspend fun requestAuthorization(includeVisibleFolderScope: Boolean): DriveAuthState {
-    val availability = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
+    val availability =
+      try {
+        GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (e: Exception) {
+        return DriveAuthState.Failed(
+          e.localizedMessage ?: "Google Play Services check failed."
+        )
+      }
     if (availability != ConnectionResult.SUCCESS) {
       return DriveAuthState.Failed(
         "Google Play Services unavailable on this device (code $availability)."
       )
     }
 
-    return withTimeoutOrNull(AUTH_TIMEOUT_MS) {
-      suspendCancellableCoroutine { cont ->
-        val scopes =
-          buildList {
-            add(Scope(SCOPE_DRIVE_APPDATA))
-            add(Scope(SCOPE_EMAIL))
-            if (includeVisibleFolderScope) {
-              add(Scope(SCOPE_DRIVE_FILE))
-            }
-          }
-        val request = AuthorizationRequest.builder().setRequestedScopes(scopes).build()
-        Identity.getAuthorizationClient(context)
-          .authorize(request)
-          .addOnSuccessListener { result ->
-            if (!cont.isActive) return@addOnSuccessListener
-            if (result.hasResolution()) {
-              val pi = result.pendingIntent
-              if (pi != null) {
-                cont.resume(DriveAuthState.NeedsUserConsent(pi))
-              } else {
-                cont.resume(DriveAuthState.Failed("Authorization consent intent unavailable."))
-              }
-            } else {
-              val token = result.accessToken
-              if (!token.isNullOrBlank()) {
-                cachedToken = token
-                cont.resume(DriveAuthState.Authorized(token))
-              } else {
-                cont.resume(DriveAuthState.Failed("No access token returned by Google Play Services."))
+    return try {
+      withTimeoutOrNull(AUTH_TIMEOUT_MS) {
+        suspendCancellableCoroutine { cont ->
+          val scopes =
+            buildList {
+              add(Scope(SCOPE_DRIVE_APPDATA))
+              add(Scope(SCOPE_EMAIL))
+              if (includeVisibleFolderScope) {
+                add(Scope(SCOPE_DRIVE_FILE))
               }
             }
-          }
-          .addOnFailureListener { e ->
-            if (!cont.isActive) return@addOnFailureListener
-            cont.resume(
-              DriveAuthState.Failed(
-                e.localizedMessage
-                  ?: "Google Drive OAuth authorization failed. Check Play Services & OAuth client ID."
+          val request = AuthorizationRequest.builder().setRequestedScopes(scopes).build()
+          Identity.getAuthorizationClient(context)
+            .authorize(request)
+            .addOnSuccessListener { result ->
+              if (!cont.isActive) return@addOnSuccessListener
+              if (result.hasResolution()) {
+                val pi = result.pendingIntent
+                if (pi != null) {
+                  cont.resume(DriveAuthState.NeedsUserConsent(pi))
+                } else {
+                  cont.resume(DriveAuthState.Failed("Authorization consent intent unavailable."))
+                }
+              } else {
+                val token = result.accessToken
+                if (!token.isNullOrBlank()) {
+                  cachedToken = token
+                  cont.resume(DriveAuthState.Authorized(token))
+                } else {
+                  cont.resume(DriveAuthState.Failed("No access token returned by Google Play Services."))
+                }
+              }
+            }
+            .addOnFailureListener { e ->
+              if (!cont.isActive) return@addOnFailureListener
+              cont.resume(
+                DriveAuthState.Failed(
+                  e.localizedMessage
+                    ?: "Google Drive OAuth authorization failed. Check Play Services & OAuth client ID."
+                )
               )
-            )
-          }
-      }
-    } ?: DriveAuthState.Failed("Google Drive authorization timed out.")
+            }
+        }
+      } ?: DriveAuthState.Failed("Google Drive authorization timed out.")
+    } catch (ce: CancellationException) {
+      throw ce
+    } catch (e: Exception) {
+      DriveAuthState.Failed(e.localizedMessage ?: "Google Drive authorization error.")
+    }
   }
 
   fun handleAuthorizationResultIntent(intent: Intent?): DriveAuthState {

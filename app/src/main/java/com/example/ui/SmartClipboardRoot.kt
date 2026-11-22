@@ -1,7 +1,14 @@
 package com.example.ui
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.AssetManager
 import android.content.res.Configuration
+import android.content.res.Resources
+import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,6 +65,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -147,10 +155,38 @@ fun SmartClipboardRoot(
         }
     }
 
-  CompositionLocalProvider(
-    LocalContext provides localizedContext,
-    LocalLayoutDirection provides layoutDirection,
-  ) {
+  val existingResultOwner = LocalActivityResultRegistryOwner.current
+  val existingBackOwner = LocalOnBackPressedDispatcherOwner.current
+  val resultRegistryOwner =
+    remember(baseContext, existingResultOwner) {
+      existingResultOwner ?: findContextOwner<ActivityResultRegistryOwner>(baseContext)
+    }
+  val backDispatcherOwner =
+    remember(baseContext, existingBackOwner) {
+      existingBackOwner ?: findContextOwner<OnBackPressedDispatcherOwner>(baseContext)
+    }
+
+  val providersList =
+    remember(
+      localizedContext,
+      layoutDirection,
+      resultRegistryOwner,
+      backDispatcherOwner,
+    ) {
+      buildList {
+        add(LocalContext provides localizedContext)
+        add(LocalConfiguration provides localizedContext.resources.configuration)
+        add(LocalLayoutDirection provides layoutDirection)
+        if (resultRegistryOwner != null) {
+          add(LocalActivityResultRegistryOwner provides resultRegistryOwner)
+        }
+        if (backDispatcherOwner != null) {
+          add(LocalOnBackPressedDispatcherOwner provides backDispatcherOwner)
+        }
+      }.toTypedArray()
+    }
+
+  CompositionLocalProvider(*providersList) {
     SmartClipboardTheme(themeMode = settings.themeMode) {
       if (isLocked && settings.appLockEnabled) {
         AppLockOverlay(
@@ -166,24 +202,8 @@ fun SmartClipboardRoot(
       val currentDest = backStackEntry?.destination
       val snackbarHostState = remember { SnackbarHostState() }
 
-      val activeClips by clipboardViewModel.activeClips.collectAsStateWithLifecycle()
-      val favoriteClips by clipboardViewModel.favoriteClips.collectAsStateWithLifecycle()
-      val trashedClips by clipboardViewModel.trashedClips.collectAsStateWithLifecycle()
+      // Shared across routes & AddEditClipSheet; screen-specific flows are scoped per destination below
       val categories by clipboardViewModel.categories.collectAsStateWithLifecycle()
-      val selectedIds by clipboardViewModel.selectedClipIds.collectAsStateWithLifecycle()
-      val detectedClipboardText by clipboardViewModel.detectedClipboardText.collectAsStateWithLifecycle()
-      val searchFilter by clipboardViewModel.searchFilter.collectAsStateWithLifecycle()
-      val searchResults by clipboardViewModel.searchResults.collectAsStateWithLifecycle()
-
-      val telegramConfig by syncViewModel.telegramConfig.collectAsStateWithLifecycle()
-      val discordConfig by syncViewModel.discordConfig.collectAsStateWithLifecycle()
-      val driveConfig by syncViewModel.googleDriveConfig.collectAsStateWithLifecycle()
-      val driveBackups by syncViewModel.driveBackups.collectAsStateWithLifecycle()
-      val driveFolders by syncViewModel.driveFolders.collectAsStateWithLifecycle()
-      val syncState by syncViewModel.syncState.collectAsStateWithLifecycle()
-      val syncLogs by syncViewModel.syncLogs.collectAsStateWithLifecycle()
-      val lastGlobalSyncAt by syncViewModel.lastGlobalSyncAt.collectAsStateWithLifecycle()
-      val syncBusy by syncViewModel.isBusy.collectAsStateWithLifecycle()
 
       var showAddSheet by remember { mutableStateOf(false) }
       var prefillContent by remember { mutableStateOf("") }
@@ -465,6 +485,9 @@ fun SmartClipboardRoot(
                 exitTransition = { fadeOut(animationSpec = tween(150)) },
               ) {
                 composable<HomeRoute> {
+                  val activeClips by clipboardViewModel.activeClips.collectAsStateWithLifecycle()
+                  val detectedClipboardText by
+                    clipboardViewModel.detectedClipboardText.collectAsStateWithLifecycle()
                   HomeScreen(
                     clips = activeClips,
                     categories = categories,
@@ -495,6 +518,8 @@ fun SmartClipboardRoot(
                 }
 
                 composable<AllClipsRoute> {
+                  val activeClips by clipboardViewModel.activeClips.collectAsStateWithLifecycle()
+                  val selectedIds by clipboardViewModel.selectedClipIds.collectAsStateWithLifecycle()
                   AllClipsScreen(
                     clips = activeClips,
                     categories = categories,
@@ -517,6 +542,7 @@ fun SmartClipboardRoot(
                 }
 
                 composable<FavoritesRoute> {
+                  val favoriteClips by clipboardViewModel.favoriteClips.collectAsStateWithLifecycle()
                   FavoritesScreen(
                     favorites = favoriteClips,
                     categories = categories,
@@ -529,6 +555,7 @@ fun SmartClipboardRoot(
 
                 composable<CollectionsRoute> { entry ->
                   val route = entry.toRoute<CollectionsRoute>()
+                  val activeClips by clipboardViewModel.activeClips.collectAsStateWithLifecycle()
                   CollectionsScreen(
                     categories = categories,
                     clips = activeClips,
@@ -544,6 +571,8 @@ fun SmartClipboardRoot(
                 }
 
                 composable<SearchRoute> {
+                  val searchFilter by clipboardViewModel.searchFilter.collectAsStateWithLifecycle()
+                  val searchResults by clipboardViewModel.searchResults.collectAsStateWithLifecycle()
                   SearchScreen(
                     filter = searchFilter,
                     results = searchResults,
@@ -561,6 +590,11 @@ fun SmartClipboardRoot(
                 }
 
                 composable<IntegrationsRoute> {
+                  val telegramConfig by syncViewModel.telegramConfig.collectAsStateWithLifecycle()
+                  val discordConfig by syncViewModel.discordConfig.collectAsStateWithLifecycle()
+                  val driveConfig by syncViewModel.googleDriveConfig.collectAsStateWithLifecycle()
+                  val driveFolders by syncViewModel.driveFolders.collectAsStateWithLifecycle()
+                  val syncBusy by syncViewModel.isBusy.collectAsStateWithLifecycle()
                   IntegrationsScreen(
                     viewModel = syncViewModel,
                     telegramConfig = telegramConfig,
@@ -572,6 +606,14 @@ fun SmartClipboardRoot(
                 }
 
                 composable<BackupSyncRoute> {
+                  val telegramConfig by syncViewModel.telegramConfig.collectAsStateWithLifecycle()
+                  val discordConfig by syncViewModel.discordConfig.collectAsStateWithLifecycle()
+                  val driveConfig by syncViewModel.googleDriveConfig.collectAsStateWithLifecycle()
+                  val driveBackups by syncViewModel.driveBackups.collectAsStateWithLifecycle()
+                  val syncState by syncViewModel.syncState.collectAsStateWithLifecycle()
+                  val syncLogs by syncViewModel.syncLogs.collectAsStateWithLifecycle()
+                  val lastGlobalSyncAt by syncViewModel.lastGlobalSyncAt.collectAsStateWithLifecycle()
+                  val syncBusy by syncViewModel.isBusy.collectAsStateWithLifecycle()
                   BackupSyncScreen(
                     viewModel = syncViewModel,
                     syncState = syncState,
@@ -601,6 +643,7 @@ fun SmartClipboardRoot(
                 }
 
                 composable<TrashRoute> {
+                  val trashedClips by clipboardViewModel.trashedClips.collectAsStateWithLifecycle()
                   TrashScreen(
                     trashedClips = trashedClips,
                     onRestore = clipboardViewModel::restoreFromTrash,
@@ -667,5 +710,24 @@ private fun applyLocaleContext(base: Context, language: AppLanguage): Context {
   val config = Configuration(base.resources.configuration)
   config.setLocale(locale)
   config.setLayoutDirection(locale)
-  return base.createConfigurationContext(config)
+  val configContext = base.createConfigurationContext(config)
+  return LocalizedContextWrapper(base, configContext.resources)
+}
+
+private class LocalizedContextWrapper(
+  base: Context,
+  private val localizedResources: Resources,
+) : ContextWrapper(base) {
+  override fun getResources(): Resources = localizedResources
+
+  override fun getAssets(): AssetManager = localizedResources.assets
+}
+
+private inline fun <reified T> findContextOwner(context: Context): T? {
+  var current: Context? = context
+  while (current != null) {
+    if (current is T) return current
+    current = (current as? ContextWrapper)?.baseContext
+  }
+  return null
 }
