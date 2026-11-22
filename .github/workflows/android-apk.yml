@@ -26,13 +26,21 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        run: |
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          mkdir -p "$SDK_DIR/licenses"
+          SDKMANAGER="$(find "$SDK_DIR/cmdline-tools" -name sdkmanager -type f 2>/dev/null | sort -V | tail -n 1)"
+          if [ -n "$SDKMANAGER" ]; then
+            printf 'y\n%.0s' {1..30} | "$SDKMANAGER" --licenses >/dev/null || true
+          fi
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
 
       - name: Decode debug keystore for CI build
         run: |
           if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
+            tr -d '\r\n ' < debug.keystore.base64 | base64 -d > debug.keystore
           fi
 
       - name: Set up Gradle 9.3.1
@@ -65,7 +73,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [ -n "$RELEASE_KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
-            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
+            echo "$RELEASE_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > my-upload-key.jks
             gradle :app:assembleRelease --no-daemon --console=plain
             cp app/build/outputs/apk/release/app-release.apk release-apks/SmartClipboard-release.apk
             rm -f my-upload-key.jks
