@@ -30,6 +30,8 @@ jobs:
         run: |
           SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           mkdir -p "$SDK_DIR/licenses"
+          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n" >> "$SDK_DIR/licenses/android-sdk-license"
+          printf "\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910\n" >> "$SDK_DIR/licenses/android-sdk-preview-license"
           SDKMANAGER="$(find "$SDK_DIR/cmdline-tools" -name sdkmanager -type f 2>/dev/null | sort -V | tail -n 1)"
           if [ -n "$SDKMANAGER" ]; then
             printf 'y\n%.0s' {1..30} | "$SDKMANAGER" --licenses >/dev/null || true
@@ -61,14 +63,17 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: Build Debug APK
+        env:
+          JAVA_TOOL_OPTIONS: "-Djava.awt.headless=true"
         run: |
           gradle :app:assembleDebug \
             --no-daemon \
             --no-configuration-cache \
+            --no-parallel \
             --stacktrace \
             --console=plain \
             -Dorg.gradle.workers.max=2 \
-            -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+            -Dorg.gradle.jvmargs="-Xmx3072m -XX:MaxMetaspaceSize=1024m -Djava.awt.headless=true -Dfile.encoding=UTF-8"
 
       - name: Prepare Installable Debug APK
         run: |
@@ -83,17 +88,21 @@ jobs:
           if-no-files-found: error
 
       - name: Run Unit & Robolectric Tests
+        env:
+          JAVA_TOOL_OPTIONS: "-Djava.awt.headless=true"
         run: |
           gradle :app:testDebugUnitTest \
             --no-daemon \
             --no-configuration-cache \
+            --no-parallel \
             --stacktrace \
             --console=plain \
             -Dorg.gradle.workers.max=2 \
-            -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+            -Dorg.gradle.jvmargs="-Xmx3072m -XX:MaxMetaspaceSize=1024m -Djava.awt.headless=true -Dfile.encoding=UTF-8"
 
       - name: Build Signed Release APK (when release secrets are configured)
         env:
+          JAVA_TOOL_OPTIONS: "-Djava.awt.headless=true"
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -103,10 +112,11 @@ jobs:
             gradle :app:assembleRelease \
               --no-daemon \
               --no-configuration-cache \
+              --no-parallel \
               --stacktrace \
               --console=plain \
               -Dorg.gradle.workers.max=2 \
-              -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+              -Dorg.gradle.jvmargs="-Xmx3072m -XX:MaxMetaspaceSize=1024m -Djava.awt.headless=true -Dfile.encoding=UTF-8"
             cp app/build/outputs/apk/release/app-release.apk release-apks/SmartClipboard-release.apk
             rm -f my-upload-key.jks
           else

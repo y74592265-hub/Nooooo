@@ -416,16 +416,16 @@ constructor(
         val useEncrypted = cfg.encryptBackups && !passphrase.isNullOrBlank()
 
         val rawContent =
-          if (useEncrypted) {
+          if (useEncrypted && passphrase != null) {
             exportImportUseCase.exportEncryptedBackup(
-              passphrase = passphrase!!,
+              passphrase = passphrase,
               isIncremental = isIncremental,
               sinceTimestamp = if (isIncremental) cfg.lastBackupAt else null,
               baseBackupFileId = if (isIncremental) cfg.lastBackupFileId else null,
             )
           } else if (isIncremental) {
             exportImportUseCase.exportIncrementalAsJson(
-              sinceTimestamp = cfg.lastBackupAt!!,
+              sinceTimestamp = cfg.lastBackupAt ?: 0L,
               baseBackupFileId = cfg.lastBackupFileId,
             )
           } else {
