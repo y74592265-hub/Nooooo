@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.R
@@ -20,6 +21,7 @@ import com.example.integrations.ProviderResult
 import com.example.integrations.discord.DiscordGuildSummary
 import com.example.integrations.discord.DiscordProvider
 import com.example.integrations.discord.DiscordRole
+import com.example.integrations.gdrive.BrowserOAuthSession
 import com.example.integrations.gdrive.DriveAuthState
 import com.example.integrations.gdrive.DriveFileDto
 import com.example.integrations.gdrive.GoogleDriveAuthHelper
@@ -106,8 +108,24 @@ constructor(
   private val _isBusy = MutableStateFlow(false)
   val isBusy: StateFlow<Boolean> = _isBusy.asStateFlow()
 
-  private val _pendingConsentIntent = MutableSharedFlow<android.app.PendingIntent>()
+  private val _driveSetupHelpExpanded = MutableStateFlow(false)
+  val driveSetupHelpExpanded: StateFlow<Boolean> = _driveSetupHelpExpanded.asStateFlow()
+
+  val drivePackageName: String
+    get() = driveAuthHelper.getPackageName()
+
+  val driveSha1Fingerprint: String
+    get() = driveAuthHelper.getSigningSha1Fingerprint()
+
+  private val _pendingConsentIntent =
+    MutableSharedFlow<android.app.PendingIntent>(extraBufferCapacity = 2)
   val pendingConsentIntent: SharedFlow<android.app.PendingIntent> = _pendingConsentIntent.asSharedFlow()
+
+  private val _pendingBrowserAuthUri = MutableSharedFlow<Uri>(extraBufferCapacity = 2)
+  val pendingBrowserAuthUri: SharedFlow<Uri> = _pendingBrowserAuthUri.asSharedFlow()
+
+  private var activeBrowserSession: BrowserOAuthSession? = null
+  private var activeBrowserJob: kotlinx.coroutines.Job? = null
 
   private val _statusMessages = MutableSharedFlow<UiText>(extraBufferCapacity = 8)
   val statusMessages: SharedFlow<UiText> = _statusMessages.asSharedFlow()
@@ -242,24 +260,133 @@ constructor(
     }
   }
 
-  fun connectGoogleDrive(includeVisibleFolderScope: Boolean) {
-    viewModelScope.launch {
-      runBusyAction {
-        when (val auth = driveAuthHelper.requestAuthorization(includeVisibleFolderScope)) {
-          is DriveAuthState.Authorized -> verifyDriveAfterAuth()
-          is DriveAuthState.NeedsUserConsent -> _pendingConsentIntent.emit(auth.pendingIntent)
-          is DriveAuthState.Failed -> _statusMessages.emit(UiText.Dynamic(auth.message))
+  fun toggleDriveSetupHelp(expanded: Boolean? = null) {
+    _driveSetupHelpExpanded.value = expanded ?: !_driveSetupHelpExpanded.value
+  }
+
+  fun cancelPendingDriveBrowserAuth() {
+    activeBrowserSession?.cancel()
+    activeBrowserSession = null
+    activeBrowserJob?.cancel()
+    activeBrowserJob = null
+    _isBusy.value = false
+  }
+
+  fun connectGoogleDrive(
+    includeVisibleFolderScope: Boolean,
+    oauthClientIdInput: String? = null,
+    oauthClientSecretInput: String? = null,
+  ) {
+    // Allow re-trying cleanly if a prior browser OAuth attempt was abandoned via system Back button
+    if (activeBrowserSession != null) {
+      cancelPendingDriveBrowserAuth()
+    }
+    activeBrowserJob =
+      viewModelScope.launch {
+        runBusyAction {
+          val cur = prefs.getGoogleDriveConfigOnce()
+          val cleanId = (oauthClientIdInput ?: cur.oauthClientId).trim()
+          val cleanSecret = (oauthClientSecretInput ?: cur.oauthClientSecret).trim()
+          if (cleanId != cur.oauthClientId || cleanSecret != cur.oauthClientSecret) {
+            prefs.saveGoogleDriveConfig(
+              cur.copy(oauthClientId = cleanId, oauthClientSecret = cleanSecret)
+            )
+          }
+
+          if (cleanId.isNotBlank()) {
+            val sessionRes =
+              driveAuthHelper.startBrowserLoopbackAuthorization(
+                clientId = cleanId,
+                clientSecret = cleanSecret,
+                includeVisibleFolderScope = includeVisibleFolderScope,
+              )
+            val session =
+              sessionRes.getOrElse { err ->
+                _statusMessages.emit(
+                  UiText.Dynamic(err.localizedMessage ?: "Failed to start browser OAuth.")
+                )
+                return@runBusyAction
+              }
+            activeBrowserSession = session
+            _pendingBrowserAuthUri.emit(session.authUri)
+            try {
+              when (val res = session.awaitResult()) {
+                is DriveAuthState.Authorized -> {
+                  val latest = prefs.getGoogleDriveConfigOnce()
+                  prefs.saveGoogleDriveConfig(
+                    latest.copy(
+                      oauthClientId = cleanId,
+                      oauthClientSecret = cleanSecret,
+                      cachedAccessToken = res.accessToken,
+                      accessTokenExpiresAt = res.expiresAtMs,
+                      oauthRefreshToken = res.refreshToken ?: latest.oauthRefreshToken,
+                    )
+                  )
+                  _driveSetupHelpExpanded.value = false
+                  verifyDriveAfterAuth()
+                }
+                is DriveAuthState.Failed -> {
+                  _driveSetupHelpExpanded.value = true
+                  _statusMessages.emit(UiText.Dynamic(res.message))
+                }
+                is DriveAuthState.NeedsUserConsent -> Unit
+              }
+            } finally {
+              if (activeBrowserSession === session) {
+                activeBrowserSession = null
+              }
+            }
+          } else {
+            when (val auth = driveAuthHelper.requestAuthorization(includeVisibleFolderScope)) {
+              is DriveAuthState.Authorized -> {
+                val latest = prefs.getGoogleDriveConfigOnce()
+                prefs.saveGoogleDriveConfig(
+                  latest.copy(
+                    cachedAccessToken = auth.accessToken,
+                    accessTokenExpiresAt = auth.expiresAtMs,
+                  )
+                )
+                _driveSetupHelpExpanded.value = false
+                verifyDriveAfterAuth()
+              }
+              is DriveAuthState.NeedsUserConsent -> _pendingConsentIntent.emit(auth.pendingIntent)
+              is DriveAuthState.Failed -> {
+                if (auth.isUnregisteredConsole) {
+                  _driveSetupHelpExpanded.value = true
+                }
+                _statusMessages.emit(UiText.Dynamic(auth.message))
+              }
+            }
+          }
         }
       }
-    }
   }
 
   fun onDriveConsentResult(intent: Intent?) {
+    onDriveConsentResult(android.app.Activity.RESULT_OK, intent)
+  }
+
+  fun onDriveConsentResult(resultCode: Int, intent: Intent?) {
     viewModelScope.launch {
       runBusyAction {
-        when (val res = driveAuthHelper.handleAuthorizationResultIntent(intent)) {
-          is DriveAuthState.Authorized -> verifyDriveAfterAuth()
-          is DriveAuthState.Failed -> _statusMessages.emit(UiText.Dynamic(res.message))
+        when (val res = driveAuthHelper.handleAuthorizationResultIntent(resultCode, intent)) {
+          is DriveAuthState.Authorized -> {
+            val latest = prefs.getGoogleDriveConfigOnce()
+            prefs.saveGoogleDriveConfig(
+              latest.copy(
+                cachedAccessToken = res.accessToken,
+                accessTokenExpiresAt = res.expiresAtMs,
+              )
+            )
+            _driveSetupHelpExpanded.value = false
+            verifyDriveAfterAuth()
+          }
+          is DriveAuthState.Failed -> {
+            if (res.isUnregisteredConsole) {
+              _driveSetupHelpExpanded.value = true
+            }
+            _statusMessages.emit(UiText.Dynamic(res.message))
+          }
           is DriveAuthState.NeedsUserConsent -> Unit
         }
       }
@@ -288,12 +415,24 @@ constructor(
 
   fun disconnectGoogleDrive() {
     viewModelScope.launch {
+      cancelPendingDriveBrowserAuth()
       driveAuthHelper.clearCachedToken()
-      prefs.saveGoogleDriveConfig(GoogleDriveConfig())
+      val cur = prefs.getGoogleDriveConfigOnce()
+      prefs.saveGoogleDriveConfig(
+        GoogleDriveConfig(
+          oauthClientId = cur.oauthClientId,
+          oauthClientSecret = cur.oauthClientSecret,
+        )
+      )
       _driveBackups.value = emptyList()
       _driveFolders.value = emptyList()
       _statusMessages.emit(UiText.Resource(R.string.msg_drive_disconnected))
     }
+  }
+
+  override fun onCleared() {
+    activeBrowserSession?.cancel()
+    super.onCleared()
   }
 
   fun refreshDriveBackups() {

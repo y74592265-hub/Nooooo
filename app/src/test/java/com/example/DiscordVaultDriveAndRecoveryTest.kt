@@ -61,14 +61,20 @@ import com.example.ui.screens.RecoveryCenterScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StorageCapacityScreen
 import com.example.ui.theme.SmartClipboardTheme
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.Response as OkHttpResponse
 import okio.Buffer
+import java.net.HttpURLConnection
+import java.net.URL
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -561,4 +567,166 @@ class DiscordVaultDriveAndRecoveryTest {
     composeTestRule.onNodeWithTag("block_sensitive_sync_switch").performScrollTo().assertIsDisplayed()
     composeTestRule.onNodeWithTag("settings_storage_btn").performScrollTo().assertIsDisplayed()
   }
+
+  @Test
+  fun `browser loopback pkce oauth exchanges code and returns refresh token while ignoring favicon`() =
+    runBlocking {
+      var tokenExchangeSawVerifier = false
+      val mockClient =
+        OkHttpClient.Builder()
+          .addInterceptor { chain ->
+            val req = chain.request()
+            assertEquals("https://oauth2.googleapis.com/token", req.url.toString())
+            val buf = Buffer()
+            req.body?.writeTo(buf)
+            val form = buf.readUtf8()
+            tokenExchangeSawVerifier =
+              form.contains("code_verifier=") &&
+                form.contains("client_secret=test_secret") &&
+                form.contains("code=auth_code_123")
+            val jsonResp =
+              """{"access_token":"ya29.loopback_tok","refresh_token":"1//0g_refresh_tok","expires_in":3600}"""
+            OkHttpResponse.Builder()
+              .request(req)
+              .protocol(Protocol.HTTP_1_1)
+              .code(200)
+              .message("OK")
+              .body(jsonResp.toResponseBody("application/json".toMediaType()))
+              .build()
+          }
+          .build()
+
+      val helper = GoogleDriveAuthHelper(context, mockClient)
+      val session =
+        helper
+          .startBrowserLoopbackAuthorization(
+            clientId = "12345.apps.googleusercontent.com",
+            clientSecret = "test_secret",
+            includeVisibleFolderScope = true,
+          )
+          .getOrThrow()
+
+      val redirectBase = session.authUri.getQueryParameter("redirect_uri")!!
+      val state = session.authUri.getQueryParameter("state")!!
+      assertTrue(redirectBase.startsWith("http://127.0.0.1:"))
+      assertEquals("S256", session.authUri.getQueryParameter("code_challenge_method"))
+
+      // Simulate browser requesting /favicon.ico first, then the /oauth2callback redirect
+      Thread {
+        val baseUrl = redirectBase.substringBefore("/oauth2callback")
+        runCatching {
+          val fav = (URL("$baseUrl/favicon.ico").openConnection() as HttpURLConnection)
+          assertEquals(404, fav.responseCode)
+          fav.disconnect()
+        }
+        val cb = (URL("$redirectBase?code=auth_code_123&state=$state").openConnection() as HttpURLConnection)
+        assertEquals(200, cb.responseCode)
+        cb.inputStream.bufferedReader().readText()
+        cb.disconnect()
+      }.start()
+
+      val authState = session.awaitResult()
+      assertTrue(authState is DriveAuthState.Authorized)
+      val authorized = authState as DriveAuthState.Authorized
+      assertEquals("ya29.loopback_tok", authorized.accessToken)
+      assertEquals("1//0g_refresh_tok", authorized.refreshToken)
+      assertTrue(tokenExchangeSawVerifier)
+    }
+
+  @Test
+  fun `google drive provider auto refreshes persisted oauth refresh token and surfaces disabled API error`() =
+    runTest {
+      var refreshInvoked = false
+      val fakeAuthHelper =
+        object : GoogleDriveAuthHelper(context) {
+          override suspend fun refreshAccessToken(
+            clientId: String,
+            clientSecret: String,
+            refreshToken: String,
+          ): DriveAuthState {
+            refreshInvoked = true
+            assertEquals("1//persisted_refresh", refreshToken)
+            setCachedAccessToken("ya29.refreshed_access")
+            return DriveAuthState.Authorized(
+              accessToken = "ya29.refreshed_access",
+              refreshToken = "1//rotated_refresh",
+              expiresAtMs = System.currentTimeMillis() + 3_600_000L,
+            )
+          }
+        }
+
+      var returnDisabledError = false
+      val fakeDriveApi =
+        object : GoogleDriveApiService {
+          override suspend fun getUserInfo(bearerToken: String) =
+            Response.success(GoogleUserInfoResponse("oauth@example.com", "OAuth User"))
+
+          override suspend fun listFiles(
+            bearerToken: String,
+            spaces: String,
+            query: String?,
+            fields: String,
+            orderBy: String,
+            pageSize: Int,
+          ): Response<DriveFileListResponse> {
+            if (returnDisabledError) {
+              val disabledJson =
+                """{"error":{"code":403,"message":"Google Drive API has not been used in project 123 before or it is disabled.","errors":[{"reason":"accessNotConfigured"}]}}"""
+              return Response.error(403, disabledJson.toResponseBody("application/json".toMediaType()))
+            }
+            assertEquals("Bearer ya29.refreshed_access", bearerToken)
+            return Response.success(DriveFileListResponse(emptyList()))
+          }
+
+          override suspend fun createFolder(bearerToken: String, body: DriveCreateFolderRequest) =
+            Response.success(DriveFileDto("f1", body.name, body.mimeType))
+
+          override suspend fun uploadBackupFile(
+            bearerToken: String,
+            metadata: RequestBody,
+            file: MultipartBody.Part,
+          ) = Response.error<DriveFileDto>(500, "unused".toResponseBody())
+
+          override suspend fun startResumableUpload(
+            bearerToken: String,
+            contentType: String,
+            contentLength: Long,
+            metadata: RequestBody,
+          ) = Response.error<Unit>(500, "unused".toResponseBody())
+
+          override suspend fun uploadResumableContent(uploadSessionUrl: String, content: RequestBody) =
+            Response.error<DriveFileDto>(500, "unused".toResponseBody())
+
+          override suspend fun downloadFileContent(bearerToken: String, fileId: String) =
+            Response.error<ResponseBody>(404, "unused".toResponseBody())
+
+          override suspend fun deleteFile(bearerToken: String, fileId: String) = Response.success(Unit)
+        }
+
+      prefs.saveGoogleDriveConfig(
+        GoogleDriveConfig(
+          enabled = true,
+          useAppDataFolder = true,
+          oauthClientId = "12345.apps.googleusercontent.com",
+          oauthClientSecret = "sec",
+          oauthRefreshToken = "1//persisted_refresh",
+          cachedAccessToken = "stale_token",
+          accessTokenExpiresAt = 1L,
+        )
+      )
+
+      val exportImportUseCase = ExportImportUseCase(clipRepo, categoryRepo, crypto, json)
+      val provider = GoogleDriveProvider(fakeDriveApi, fakeAuthHelper, prefs, exportImportUseCase)
+
+      val res = provider.testConnection()
+      assertTrue(res is ProviderResult.Success)
+      assertTrue(refreshInvoked)
+      assertEquals("1//rotated_refresh", prefs.getGoogleDriveConfigOnce().oauthRefreshToken)
+      assertEquals("oauth@example.com", prefs.getGoogleDriveConfigOnce().accountEmail)
+
+      returnDisabledError = true
+      val errRes = provider.testConnection()
+      assertTrue(errRes is ProviderResult.Error)
+      assertTrue((errRes as ProviderResult.Error).message.contains("Google Drive API"))
+    }
 }

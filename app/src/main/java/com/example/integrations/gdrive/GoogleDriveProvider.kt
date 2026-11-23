@@ -44,27 +44,86 @@ constructor(
 
   override suspend fun isConfigured(): Boolean {
     val cfg = prefs.getGoogleDriveConfigOnce()
-    return cfg.enabled && (cfg.accountEmail.isNotBlank() || authHelper.getCachedAccessToken() != null)
+    return cfg.enabled &&
+      (cfg.accountEmail.isNotBlank() ||
+        cfg.oauthRefreshToken.isNotBlank() ||
+        cfg.cachedAccessToken.isNotBlank() ||
+        authHelper.getCachedAccessToken() != null)
   }
 
-  private suspend fun obtainToken(includeVisibleScope: Boolean): String? {
-    authHelper.getCachedAccessToken()?.let { return it }
+  private suspend fun obtainTokenResult(
+    includeVisibleScope: Boolean,
+    forceRefresh: Boolean = false,
+  ): ProviderResult<String> {
+    if (!forceRefresh) {
+      authHelper.getCachedAccessToken()?.let { return ProviderResult.Success(it) }
+    }
+    val cfg = prefs.getGoogleDriveConfigOnce()
+    val now = System.currentTimeMillis()
+    if (!forceRefresh && cfg.cachedAccessToken.isNotBlank() && cfg.accessTokenExpiresAt > now) {
+      authHelper.setCachedAccessToken(cfg.cachedAccessToken)
+      return ProviderResult.Success(cfg.cachedAccessToken)
+    }
+    if (cfg.oauthClientId.isNotBlank() && cfg.oauthRefreshToken.isNotBlank()) {
+      return when (
+        val refreshed =
+          authHelper.refreshAccessToken(
+            clientId = cfg.oauthClientId,
+            clientSecret = cfg.oauthClientSecret,
+            refreshToken = cfg.oauthRefreshToken,
+          )
+      ) {
+        is DriveAuthState.Authorized -> {
+          val updatedCfg = prefs.getGoogleDriveConfigOnce()
+          prefs.saveGoogleDriveConfig(
+            updatedCfg.copy(
+              cachedAccessToken = refreshed.accessToken,
+              accessTokenExpiresAt = refreshed.expiresAtMs,
+              oauthRefreshToken = refreshed.refreshToken ?: updatedCfg.oauthRefreshToken,
+            )
+          )
+          ProviderResult.Success(refreshed.accessToken)
+        }
+        is DriveAuthState.Failed -> ProviderResult.Error(refreshed.message)
+        is DriveAuthState.NeedsUserConsent ->
+          ProviderResult.Error("Google Drive authorization required. Tap 'Connect Google Drive'.")
+      }
+    }
+    if (cfg.oauthClientId.isNotBlank()) {
+      return ProviderResult.Error("Google Drive browser authorization required. Tap 'Connect Google Drive'.")
+    }
     return when (val res = authHelper.requestAuthorization(includeVisibleScope)) {
-      is DriveAuthState.Authorized -> res.accessToken
-      else -> null
+      is DriveAuthState.Authorized -> ProviderResult.Success(res.accessToken)
+      is DriveAuthState.Failed -> ProviderResult.Error(res.message)
+      is DriveAuthState.NeedsUserConsent ->
+        ProviderResult.Error("Google Drive sign-in consent required. Tap 'Connect Google Drive' first.")
     }
   }
 
   private suspend fun <T> withTokenRefresh(
     includeVisibleScope: Boolean,
     block: suspend (token: String) -> Response<T>,
-  ): Pair<Response<T>?, String?> {
-    val initial = obtainToken(includeVisibleScope) ?: return null to null
-    val firstResp = block(initial)
-    if (firstResp.code() != 401) return firstResp to initial
+  ): Triple<Response<T>?, String?, String?> {
+    val initialRes = obtainTokenResult(includeVisibleScope)
+    if (initialRes is ProviderResult.Error) {
+      return Triple(null, null, initialRes.message)
+    }
+    val initialToken = (initialRes as ProviderResult.Success).data
+    val firstResp = block(initialToken)
+    if (firstResp.code() != 401) return Triple(firstResp, initialToken, null)
+
     authHelper.clearCachedToken()
-    val refreshed = obtainToken(includeVisibleScope) ?: return firstResp to null
-    return block(refreshed) to refreshed
+    val curCfg = prefs.getGoogleDriveConfigOnce()
+    if (curCfg.cachedAccessToken.isNotBlank() || curCfg.accessTokenExpiresAt != 0L) {
+      prefs.saveGoogleDriveConfig(curCfg.copy(cachedAccessToken = "", accessTokenExpiresAt = 0L))
+    }
+
+    val refreshRes = obtainTokenResult(includeVisibleScope, forceRefresh = true)
+    if (refreshRes is ProviderResult.Error) {
+      return Triple(firstResp, null, refreshRes.message)
+    }
+    val refreshedToken = (refreshRes as ProviderResult.Success).data
+    return Triple(block(refreshedToken), refreshedToken, null)
   }
 
   private suspend fun ensureVisibleBackupFolder(token: String): Pair<String?, String> {
@@ -105,14 +164,14 @@ constructor(
       val cfg = prefs.getGoogleDriveConfigOnce()
       val includeVisible = !cfg.useAppDataFolder
       try {
-        val (listResp, validToken) =
+        val (listResp, validToken, authErr) =
           withTokenRefresh(includeVisible) { tok ->
             val space = if (cfg.useAppDataFolder) "appDataFolder" else "drive"
             api.listFiles("Bearer $tok", spaces = space, pageSize = 5)
           }
         if (validToken == null || listResp == null) {
           return@withContext ProviderResult.Error(
-            "Google Drive sign-in consent required. Tap 'Connect Google Drive' first."
+            authErr ?: "Google Drive sign-in consent required. Tap 'Connect Google Drive' first."
           )
         }
         if (!listResp.isSuccessful) {
@@ -125,14 +184,15 @@ constructor(
           ensureVisibleBackupFolder(validToken)
         }
         val refreshedCfg = prefs.getGoogleDriveConfigOnce()
+        val displayEmail = email.ifBlank { "Google Account" }
         prefs.saveGoogleDriveConfig(
           refreshedCfg.copy(
             enabled = true,
             accountEmail = email,
-            lastStatus = "Connected ($email) • ${refreshedCfg.selectedFolderName}",
+            lastStatus = "Connected ($displayEmail) • ${refreshedCfg.selectedFolderName}",
           )
         )
-        ProviderResult.Success("Connected to Google Drive ($email)")
+        ProviderResult.Success("Connected to Google Drive ($displayEmail)")
       } catch (ce: CancellationException) {
         throw ce
       } catch (e: IOException) {
@@ -175,7 +235,6 @@ constructor(
     }
 
   override suspend fun pullClips(): ProviderResult<List<PulledClip>> =
-    // Auto background sync uses full/incremental backup snapshots via Cloud Recovery Center
     ProviderResult.Success(emptyList())
 
   override suspend fun fetchRecoveryItems(maxItems: Int): ProviderResult<List<PulledClip>> =
@@ -204,7 +263,7 @@ constructor(
           val collected = mutableListOf<PulledClip>()
           for (backupFile in jsonBackups) {
             if (collected.size >= maxItems) break
-            val (dlResp, _) =
+            val (dlResp, _, _) =
               withTokenRefresh(!cfg.useAppDataFolder) { tok ->
                 api.downloadFileContent("Bearer $tok", backupFile.id)
               }
@@ -236,7 +295,7 @@ constructor(
   suspend fun fetchDriveFolders(): ProviderResult<List<DriveFileDto>> =
     withContext(Dispatchers.IO) {
       try {
-        val (resp, tok) =
+        val (resp, tok, authErr) =
           withTokenRefresh(includeVisibleScope = true) { token ->
             api.listFiles(
               bearerToken = "Bearer $token",
@@ -246,7 +305,7 @@ constructor(
             )
           }
         if (tok == null || resp == null) {
-          return@withContext ProviderResult.Error("Drive folder authorization required.")
+          return@withContext ProviderResult.Error(authErr ?: "Drive folder authorization required.")
         }
         if (!resp.isSuccessful) {
           return@withContext toDriveError(resp, "Could not list Drive folders")
@@ -264,12 +323,12 @@ constructor(
   suspend fun createBackupFolder(folderName: String = DEFAULT_FOLDER_NAME): ProviderResult<DriveFileDto> =
     withContext(Dispatchers.IO) {
       try {
-        val (resp, tok) =
+        val (resp, tok, authErr) =
           withTokenRefresh(includeVisibleScope = true) { token ->
             api.createFolder("Bearer $token", DriveCreateFolderRequest(name = folderName))
           }
         if (tok == null || resp == null) {
-          return@withContext ProviderResult.Error("Drive folder authorization required.")
+          return@withContext ProviderResult.Error(authErr ?: "Drive folder authorization required.")
         }
         if (!resp.isSuccessful || resp.body() == null) {
           return@withContext toDriveError(resp, "Failed to create Drive folder")
@@ -298,7 +357,7 @@ constructor(
       val cfg = prefs.getGoogleDriveConfigOnce()
       val includeVisible = !cfg.useAppDataFolder
       try {
-        val (resp, tok) =
+        val (resp, tok, authErr) =
           withTokenRefresh(includeVisible) { token ->
             val space = if (cfg.useAppDataFolder) "appDataFolder" else "drive"
             val query =
@@ -312,7 +371,7 @@ constructor(
             api.listFiles("Bearer $token", spaces = space, query = query, pageSize = 25)
           }
         if (tok == null || resp == null) {
-          return@withContext ProviderResult.Error("Google Drive authorization required.")
+          return@withContext ProviderResult.Error(authErr ?: "Google Drive authorization required.")
         }
         if (!resp.isSuccessful) {
           if (resp.code() == 401) authHelper.clearCachedToken()
@@ -335,8 +394,11 @@ constructor(
     withContext(Dispatchers.IO) {
       val initialCfg = prefs.getGoogleDriveConfigOnce()
       val includeVisible = !initialCfg.useAppDataFolder
-      val token = obtainToken(includeVisible)
-        ?: return@withContext ProviderResult.Error("Google Drive sign-in required.")
+      val token =
+        when (val tokRes = obtainTokenResult(includeVisible)) {
+          is ProviderResult.Success -> tokRes.data
+          is ProviderResult.Error -> return@withContext tokRes
+        }
 
       try {
         val (folderId, folderDisplay) =
@@ -386,7 +448,7 @@ constructor(
           }
 
         val contentBytes = rawContent.toByteArray(Charsets.UTF_8)
-        val (uploadResp, _) =
+        val (uploadResp, _, authErr) =
           withTokenRefresh(includeVisible) { tok ->
             if (contentBytes.size > RESUMABLE_THRESHOLD_BYTES) {
               val metaReq =
@@ -422,7 +484,7 @@ constructor(
           return@withContext if (uploadResp != null) {
             toDriveError(uploadResp, "Drive upload failed")
           } else {
-            ProviderResult.Error("Drive upload failed (HTTP $code)", isRetryable = true)
+            ProviderResult.Error(authErr ?: "Drive upload failed (HTTP $code)", isRetryable = true)
           }
         }
         val uploaded = uploadResp.body()!!
@@ -447,12 +509,12 @@ constructor(
     withContext(Dispatchers.IO) {
       val cfg = prefs.getGoogleDriveConfigOnce()
       try {
-        val (resp, tok) =
+        val (resp, tok, authErr) =
           withTokenRefresh(!cfg.useAppDataFolder) { token ->
             api.downloadFileContent("Bearer $token", fileId)
           }
         if (tok == null || resp == null) {
-          return@withContext ProviderResult.Error("Google Drive sign-in required.")
+          return@withContext ProviderResult.Error(authErr ?: "Google Drive sign-in required.")
         }
         if (!resp.isSuccessful || resp.body() == null) {
           return@withContext toDriveError(resp, "Failed to download backup")
@@ -475,14 +537,14 @@ constructor(
       val fileId = remoteId.removePrefix("gdrive_file:")
       val cfg = prefs.getGoogleDriveConfigOnce()
       try {
-        val (resp, _) =
+        val (resp, _, authErr) =
           withTokenRefresh(!cfg.useAppDataFolder) { tok -> api.deleteFile("Bearer $tok", fileId) }
         if (resp != null && (resp.isSuccessful || resp.code() == 404)) {
           ProviderResult.Success(Unit)
         } else if (resp != null) {
           toDriveError(resp, "Drive delete failed")
         } else {
-          ProviderResult.Error("Drive authorization required")
+          ProviderResult.Error(authErr ?: "Drive authorization required")
         }
       } catch (ce: CancellationException) {
         throw ce
@@ -497,8 +559,23 @@ constructor(
     val code = resp.code()
     val retryAfter = resp.headers()["Retry-After"]?.toLongOrNull()
     val retryable = code == 429 || code >= 500
+    val rawErr = runCatching { resp.errorBody()?.string() }.getOrNull().orEmpty()
+    val apiMessage =
+      runCatching {
+        val errObj = JSONObject(rawErr).optJSONObject("error")
+        errObj?.optString("message").orEmpty()
+      }.getOrDefault("")
+    val detail =
+      when {
+        apiMessage.contains("has not been used in project", ignoreCase = true) ||
+          apiMessage.contains("API has not been used", ignoreCase = true) ||
+          rawErr.contains("accessNotConfigured", ignoreCase = true) ->
+          "Google Drive API is disabled in your Google Cloud project. Enable 'Google Drive API' in APIs & Services."
+        apiMessage.isNotBlank() -> "$prefix (HTTP $code): $apiMessage"
+        else -> "$prefix (HTTP $code)"
+      }
     return ProviderResult.Error(
-      message = "$prefix (HTTP $code)",
+      message = detail,
       isRetryable = retryable,
       retryAfterSeconds = retryAfter,
     )

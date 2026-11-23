@@ -387,4 +387,25 @@
     <string name="settings_delete_cloud_title">مزامنة الحذف مع السحابة</string>
     <string name="settings_delete_cloud_subtitle">عند الحذف النهائي محليًا يتم حذف النسخة المرتبطة في تيليجرام أو ديسكورد</string>
     <string name="settings_open_storage_btn">فتح شاشة إدارة سعة التخزين</string>
+
+    <!-- Google Drive OAuth & Error Handling -->
+    <string name="drive_err_play_services_unavailable">خدمات Google Play غير متوفرة (رمز %1$d). أدخل معرّف OAuth لتطبيق سطح المكتب أدناه للاتصال عبر المتصفح.</string>
+    <string name="drive_err_auth_canceled">تم إلغاء تسجيل الدخول إلى جوجل درايف.</string>
+    <string name="drive_err_oauth_timeout">انتهت مهلة تفويض المتصفح. ارجع للتطبيق واضغط ربط جوجل درايف للمحاولة مجددًا.</string>
+    <string name="drive_err_invalid_client_secret">تم رفض Client ID أو Client Secret. لعملاء سطح المكتب في Google Cloud تأكد من إدخال Client ID و Client Secret معًا.</string>
+    <string name="drive_err_redirect_uri_mismatch">نوع عميل OAuth غير متوافق. أنشئ عميل OAuth من نوع Desktop app (تطبيق سطح مكتب) وليس Web application.</string>
+    <string name="drive_err_invalid_grant">انتهت صلاحية رمز التفويض أو تم إلغاؤه. اضغط ربط جوجل درايف مجددًا.</string>
+    <string name="drive_err_network">تعذر الاتصال بخوادم جوجل. تحقق من اتصالك بالإنترنت.</string>
+    <string name="drive_err_unregistered_console">بصمة التطبيق غير مسجلة في Google Cloud Console بعد. استخدم إعداد OAuth أدناه: أنشئ Desktop OAuth Client ID + Secret (يعمل فورًا على أي APK) أو سجّل اسم الحزمة وبصمة SHA-1.</string>
+    <string name="drive_setup_toggle">إعداد OAuth 2.0 (لنسخ GitHub والربط المباشر)</string>
+    <string name="drive_setup_title">ربط جوجل درايف عبر مشروع Google Cloud</string>
+    <string name="drive_setup_hint">1) فعّل Google Drive API في Google Cloud Console.\n2) الأسهل (بدون بصمة SHA-1): أنشئ OAuth Client ID من نوع Desktop app والصق Client ID و Client Secret أدناه ثم اضغط ربط جوجل درايف.\n3) أو أنشئ عميل Android OAuth باستخدام اسم الحزمة وبصمة SHA-1 الموضحة أدناه.</string>
+    <string name="drive_oauth_client_id_label">معرّف عميل OAuth (Desktop app — اختياري)</string>
+    <string name="drive_oauth_client_secret_label">الرمز السري Client Secret (مطلوب لعميل سطح المكتب)</string>
+    <string name="drive_pkg_label">اسم الحزمة: %1$s</string>
+    <string name="drive_sha1_label">بصمة SHA-1 للنسخة: %1$s</string>
+    <string name="drive_copy_value">نسخ</string>
+    <string name="drive_copied_value">تم النسخ للحافظة</string>
+    <string name="drive_open_cloud_console">فتح Google Cloud Console</string>
+    <string name="drive_save_credentials">حفظ بيانات OAuth</string>
 </resources>

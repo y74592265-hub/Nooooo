@@ -1,8 +1,12 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -19,11 +23,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Visibility
@@ -50,12 +59,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.domain.model.DiscordConfig
 import com.example.domain.model.GoogleDriveConfig
@@ -84,14 +97,28 @@ fun IntegrationsScreen(
   isBusy: Boolean,
   modifier: Modifier = Modifier,
 ) {
+  val context = LocalContext.current
+  val setupHelpExpanded by viewModel.driveSetupHelpExpanded.collectAsStateWithLifecycle()
+
   val consentLauncher =
     rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-      viewModel.onDriveConsentResult(result.data)
+      viewModel.onDriveConsentResult(result.resultCode, result.data)
     }
 
   LaunchedEffect(Unit) {
     viewModel.pendingConsentIntent.collect { pendingIntent ->
       consentLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
+    }
+  }
+
+  LaunchedEffect(Unit) {
+    viewModel.pendingBrowserAuthUri.collect { authUri ->
+      runCatching {
+        val intent = Intent(Intent.ACTION_VIEW, authUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+      }.onFailure {
+        Toast.makeText(context, "No browser app found to open Google sign-in.", Toast.LENGTH_LONG).show()
+      }
     }
   }
 
@@ -131,7 +158,13 @@ fun IntegrationsScreen(
       GoogleDriveIntegrationCard(
         config = driveConfig,
         isBusy = isBusy,
-        onConnect = { viewModel.connectGoogleDrive(!driveConfig.useAppDataFolder) },
+        setupHelpExpanded = setupHelpExpanded,
+        packageName = viewModel.drivePackageName,
+        sha1Fingerprint = viewModel.driveSha1Fingerprint,
+        onToggleSetupHelp = { viewModel.toggleDriveSetupHelp() },
+        onConnect = { clientId, clientSecret ->
+          viewModel.connectGoogleDrive(!driveConfig.useAppDataFolder, clientId, clientSecret)
+        },
         onSaveConfig = viewModel::saveDriveConfig,
         onOpenFolderPicker = {
           viewModel.loadDriveFolders()
@@ -709,11 +742,22 @@ private fun DiscordIntegrationCard(
 private fun GoogleDriveIntegrationCard(
   config: GoogleDriveConfig,
   isBusy: Boolean,
-  onConnect: () -> Unit,
+  setupHelpExpanded: Boolean,
+  packageName: String,
+  sha1Fingerprint: String,
+  onToggleSetupHelp: () -> Unit,
+  onConnect: (clientId: String, clientSecret: String) -> Unit,
   onSaveConfig: (GoogleDriveConfig) -> Unit,
   onOpenFolderPicker: () -> Unit,
   onDisconnect: () -> Unit,
 ) {
+  val context = LocalContext.current
+  val clipboardManager = LocalClipboardManager.current
+  var oauthClientId by remember(config.oauthClientId) { mutableStateOf(config.oauthClientId) }
+  var oauthClientSecret by
+    remember(config.oauthClientSecret) { mutableStateOf(config.oauthClientSecret) }
+  var showClientSecret by remember { mutableStateOf(false) }
+
   VaultSectionCard {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Icon(Icons.Filled.CloudDone, null, tint = MaterialTheme.colorScheme.tertiary)
@@ -795,9 +839,173 @@ private fun GoogleDriveIntegrationCard(
       )
     }
 
+    OutlinedButton(
+      onClick = onToggleSetupHelp,
+      modifier = Modifier.fillMaxWidth().testTag("drive_setup_toggle_btn"),
+    ) {
+      Icon(Icons.Filled.Key, null, Modifier.size(18.dp))
+      Spacer(Modifier.width(8.dp))
+      Text(stringResource(R.string.drive_setup_toggle), modifier = Modifier.weight(1f))
+      Icon(
+        if (setupHelpExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+        contentDescription = null,
+      )
+    }
+
+    AnimatedVisibility(visible = setupHelpExpanded || config.oauthClientId.isNotBlank()) {
+      Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        Column(
+          modifier = Modifier.padding(12.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Text(
+            text = stringResource(R.string.drive_setup_title),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+          )
+          Text(
+            text = stringResource(R.string.drive_setup_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            Text(
+              text = stringResource(R.string.drive_pkg_label, packageName),
+              style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
+              modifier = Modifier.weight(1f),
+            )
+            IconButton(
+              onClick = {
+                clipboardManager.setText(AnnotatedString(packageName))
+                Toast.makeText(
+                  context,
+                  context.getString(R.string.drive_copied_value),
+                  Toast.LENGTH_SHORT,
+                ).show()
+              }
+            ) {
+              Icon(
+                Icons.Filled.ContentCopy,
+                contentDescription = stringResource(R.string.drive_copy_value),
+                modifier = Modifier.size(18.dp),
+              )
+            }
+          }
+
+          if (sha1Fingerprint.isNotBlank()) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+              Text(
+                text = stringResource(R.string.drive_sha1_label, sha1Fingerprint),
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
+                modifier = Modifier.weight(1f),
+              )
+              IconButton(
+                onClick = {
+                  clipboardManager.setText(AnnotatedString(sha1Fingerprint))
+                  Toast.makeText(
+                    context,
+                    context.getString(R.string.drive_copied_value),
+                    Toast.LENGTH_SHORT,
+                  ).show()
+                }
+              ) {
+                Icon(
+                  Icons.Filled.ContentCopy,
+                  contentDescription = stringResource(R.string.drive_copy_value),
+                  modifier = Modifier.size(18.dp),
+                )
+              }
+            }
+          }
+
+          TextButton(
+            onClick = {
+              runCatching {
+                context.startActivity(
+                  Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://console.cloud.google.com/apis/credentials"),
+                  )
+                )
+              }
+            },
+            modifier = Modifier.testTag("drive_open_console_btn"),
+          ) {
+            Icon(Icons.AutoMirrored.Filled.OpenInNew, null, Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.drive_open_cloud_console))
+          }
+
+          OutlinedTextField(
+            value = oauthClientId,
+            onValueChange = { oauthClientId = it },
+            label = { Text(stringResource(R.string.drive_oauth_client_id_label)) },
+            singleLine = true,
+            textStyle =
+              LocalTextStyle.current.copy(
+                fontFamily = JetBrainsMonoFamily,
+                textDirection = TextDirection.Ltr,
+              ),
+            modifier = Modifier.fillMaxWidth().testTag("drive_client_id_input"),
+          )
+
+          OutlinedTextField(
+            value = oauthClientSecret,
+            onValueChange = { oauthClientSecret = it },
+            label = { Text(stringResource(R.string.drive_oauth_client_secret_label)) },
+            singleLine = true,
+            textStyle =
+              LocalTextStyle.current.copy(
+                fontFamily = JetBrainsMonoFamily,
+                textDirection = TextDirection.Ltr,
+              ),
+            visualTransformation =
+              if (showClientSecret) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+              IconButton(onClick = { showClientSecret = !showClientSecret }) {
+                Icon(
+                  if (showClientSecret) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                  contentDescription = stringResource(R.string.integration_toggle_visibility),
+                )
+              }
+            },
+            modifier = Modifier.fillMaxWidth().testTag("drive_client_secret_input"),
+          )
+
+          OutlinedButton(
+            onClick = {
+              onSaveConfig(
+                config.copy(
+                  oauthClientId = oauthClientId.trim(),
+                  oauthClientSecret = oauthClientSecret.trim(),
+                )
+              )
+            },
+            enabled = !isBusy,
+            modifier = Modifier.fillMaxWidth().testTag("drive_save_credentials_btn"),
+          ) {
+            Text(stringResource(R.string.drive_save_credentials))
+          }
+        }
+      }
+    }
+
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       Button(
-        onClick = onConnect,
+        onClick = { onConnect(oauthClientId, oauthClientSecret) },
         enabled = !isBusy,
         modifier = Modifier.weight(1f).testTag("connect_drive_btn"),
       ) {

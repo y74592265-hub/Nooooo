@@ -387,4 +387,25 @@
     <string name="settings_delete_cloud_title">Sync Deletions to Cloud</string>
     <string name="settings_delete_cloud_subtitle">When permanently deleting a clip locally, remove its linked Telegram/Discord copy</string>
     <string name="settings_open_storage_btn">Open Storage Capacity Manager</string>
+
+    <!-- Google Drive OAuth & Error Handling -->
+    <string name="drive_err_play_services_unavailable">Google Play Services unavailable (code %1$d). Enter a Desktop OAuth Client ID below to connect via browser instead.</string>
+    <string name="drive_err_auth_canceled">Google Drive sign-in was canceled.</string>
+    <string name="drive_err_oauth_timeout">Browser sign-in timed out. Return to the app and tap Connect Google Drive to try again.</string>
+    <string name="drive_err_invalid_client_secret">OAuth Client ID or Client Secret rejected. For Desktop OAuth clients in Google Cloud Console, enter both Client ID and Client Secret.</string>
+    <string name="drive_err_redirect_uri_mismatch">Redirect URI mismatch. Create a Desktop App OAuth Client ID (not a Web client) in Google Cloud Console.</string>
+    <string name="drive_err_invalid_grant">Authorization code expired or revoked. Tap Connect Google Drive again.</string>
+    <string name="drive_err_network">Network error reaching Google Sign-In. Check your internet connection.</string>
+    <string name="drive_err_unregistered_console">App SHA-1 is not registered on Google Cloud Console yet. Open OAuth Setup below: paste a Desktop OAuth Client ID + Secret (works on any APK) or register this APK package &amp; SHA-1.</string>
+    <string name="drive_setup_toggle">OAuth 2.0 Setup Guide (for GitHub / Custom APKs)</string>
+    <string name="drive_setup_title">Connect Google Drive via Your Google Cloud Project</string>
+    <string name="drive_setup_hint">1) Enable Google Drive API in Google Cloud Console.\n2) Easiest (no SHA-1 needed): Create a Desktop App OAuth Client ID, paste Client ID &amp; Secret below, then tap Connect Google Drive.\n3) Or create an Android OAuth Client ID using the Package Name &amp; SHA-1 below.</string>
+    <string name="drive_oauth_client_id_label">OAuth Client ID (Desktop App — Optional)</string>
+    <string name="drive_oauth_client_secret_label">OAuth Client Secret (Required for Desktop Client)</string>
+    <string name="drive_pkg_label">Package Name: %1$s</string>
+    <string name="drive_sha1_label">APK SHA-1: %1$s</string>
+    <string name="drive_copy_value">Copy</string>
+    <string name="drive_copied_value">Copied to clipboard</string>
+    <string name="drive_open_cloud_console">Open Google Cloud Console</string>
+    <string name="drive_save_credentials">Save OAuth Credentials</string>
 </resources>

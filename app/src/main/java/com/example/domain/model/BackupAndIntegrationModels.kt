@@ -91,4 +91,9 @@ data class GoogleDriveConfig(
   val lastBackupFileId: String? = null,
   val lastBackupHashCount: Int = 0,
   val lastStatus: String = "",
+  val oauthClientId: String = "",
+  val oauthClientSecret: String = "",
+  val oauthRefreshToken: String = "",
+  val cachedAccessToken: String = "",
+  val accessTokenExpiresAt: Long = 0L,
 )
