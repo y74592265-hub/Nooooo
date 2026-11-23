@@ -87,15 +87,18 @@ import com.example.core.preferences.AppLanguage
 import com.example.domain.model.ClipSource
 import com.example.ui.components.AddEditClipSheet
 import com.example.ui.components.AppLockOverlay
+import com.example.ui.components.ProvideSafeTextToolbar
 import com.example.ui.navigation.AllClipsRoute
 import com.example.ui.navigation.BackupSyncRoute
 import com.example.ui.navigation.ClipDetailsRoute
+import com.example.ui.navigation.CloudRecoveryRoute
 import com.example.ui.navigation.CollectionsRoute
 import com.example.ui.navigation.FavoritesRoute
 import com.example.ui.navigation.HomeRoute
 import com.example.ui.navigation.IntegrationsRoute
 import com.example.ui.navigation.SearchRoute
 import com.example.ui.navigation.SettingsRoute
+import com.example.ui.navigation.StorageCapacityRoute
 import com.example.ui.navigation.TrashRoute
 import com.example.ui.screens.AllClipsScreen
 import com.example.ui.screens.BackupSyncScreen
@@ -104,11 +107,14 @@ import com.example.ui.screens.CollectionsScreen
 import com.example.ui.screens.FavoritesScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.IntegrationsScreen
+import com.example.ui.screens.RecoveryCenterScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.SettingsScreen
+import com.example.ui.screens.StorageCapacityScreen
 import com.example.ui.screens.TrashScreen
 import com.example.ui.theme.SmartClipboardTheme
 import com.example.ui.viewmodel.ClipboardViewModel
+import com.example.ui.viewmodel.RecoveryViewModel
 import com.example.ui.viewmodel.SettingsViewModel
 import com.example.ui.viewmodel.SyncIntegrationsViewModel
 import java.util.Locale
@@ -132,6 +138,7 @@ fun SmartClipboardRoot(
   clipboardViewModel: ClipboardViewModel = hiltViewModel(),
   syncViewModel: SyncIntegrationsViewModel = hiltViewModel(),
   settingsViewModel: SettingsViewModel = hiltViewModel(),
+  recoveryViewModel: RecoveryViewModel = hiltViewModel(),
 ) {
   val settings by settingsViewModel.userSettings.collectAsStateWithLifecycle()
   val baseContext = LocalContext.current
@@ -188,13 +195,14 @@ fun SmartClipboardRoot(
 
   CompositionLocalProvider(*providersList) {
     SmartClipboardTheme(themeMode = settings.themeMode) {
-      if (isLocked && settings.appLockEnabled) {
+      ProvideSafeTextToolbar {
+        if (isLocked && settings.appLockEnabled) {
         AppLockOverlay(
           onUnlockClick = onRequestUnlock,
           errorMessage = lockErrorMessage,
           modifier = Modifier.fillMaxSize(),
         )
-        return@SmartClipboardTheme
+        return@ProvideSafeTextToolbar
       }
 
       val navController = rememberNavController()
@@ -232,6 +240,11 @@ fun SmartClipboardRoot(
       }
       LaunchedEffect(Unit) {
         settingsViewModel.events.collect {
+          snackbarHostState.showSnackbar(it.resolve(activeLocalizedContext))
+        }
+      }
+      LaunchedEffect(Unit) {
+        recoveryViewModel.statusMessages.collect {
           snackbarHostState.showSnackbar(it.resolve(activeLocalizedContext))
         }
       }
@@ -289,6 +302,8 @@ fun SmartClipboardRoot(
           currentDest?.hasRoute<SettingsRoute>() == true -> stringResource(R.string.nav_settings)
           currentDest?.hasRoute<TrashRoute>() == true -> stringResource(R.string.nav_trash)
           currentDest?.hasRoute<ClipDetailsRoute>() == true -> stringResource(R.string.nav_clip_details)
+          currentDest?.hasRoute<CloudRecoveryRoute>() == true -> stringResource(R.string.nav_cloud_recovery)
+          currentDest?.hasRoute<StorageCapacityRoute>() == true -> stringResource(R.string.nav_storage_capacity)
           else -> stringResource(R.string.app_name)
         }
 
@@ -485,21 +500,26 @@ fun SmartClipboardRoot(
                 exitTransition = { fadeOut(animationSpec = tween(150)) },
               ) {
                 composable<HomeRoute> {
-                  val activeClips by clipboardViewModel.activeClips.collectAsStateWithLifecycle()
-                  val detectedClipboardText by
-                    clipboardViewModel.detectedClipboardText.collectAsStateWithLifecycle()
+                  val pagedClips by clipboardViewModel.pagedActiveClips.collectAsStateWithLifecycle()
+                  val totalCount by clipboardViewModel.totalActiveClipCount.collectAsStateWithLifecycle()
+                  val autoCapturedBanner by
+                    clipboardViewModel.lastAutoCapturedBanner.collectAsStateWithLifecycle()
+                  val storageStats by clipboardViewModel.storageStats.collectAsStateWithLifecycle()
                   HomeScreen(
-                    clips = activeClips,
+                    clips = pagedClips,
+                    totalActiveCount = totalCount,
                     categories = categories,
-                    detectedClipboardText = detectedClipboardText,
+                    autoCapturedBanner = autoCapturedBanner,
+                    storageStats = storageStats,
                     onCaptureClipboardNow = {
                       val pasted = clipboardViewModel.readSystemClipboardNow()
                       prefillContent = pasted.orEmpty()
                       prefillSource = ClipSource.CLIPBOARD
                       showAddSheet = true
                     },
-                    onSaveDetectedClipboard = clipboardViewModel::saveDetectedClipboard,
-                    onDismissDetectedClipboard = clipboardViewModel::dismissDetectedClipboard,
+                    onUndoAutoCaptured = clipboardViewModel::undoAutoCapturedClip,
+                    onMarkBannerSensitive = clipboardViewModel::markBannerClipSensitive,
+                    onDismissAutoCapturedBanner = clipboardViewModel::dismissAutoCapturedBanner,
                     onAddNewClip = {
                       prefillContent = ""
                       prefillSource = ClipSource.MANUAL
@@ -511,6 +531,8 @@ fun SmartClipboardRoot(
                     onToggleFavorite = clipboardViewModel::toggleFavorite,
                     onOpenFavorites = { navController.navigate(FavoritesRoute) },
                     onOpenIntegrations = { navController.navigate(IntegrationsRoute) },
+                    onOpenRecovery = { navController.navigate(CloudRecoveryRoute) },
+                    onOpenStorage = { navController.navigate(StorageCapacityRoute) },
                     onOpenTrash = { navController.navigate(TrashRoute) },
                     onOpenSettings = { navController.navigate(SettingsRoute) },
                     onOpenBackupSync = { navigateTopLevel(BackupSyncRoute) },
@@ -518,12 +540,19 @@ fun SmartClipboardRoot(
                 }
 
                 composable<AllClipsRoute> {
-                  val activeClips by clipboardViewModel.activeClips.collectAsStateWithLifecycle()
+                  val pagedClips by clipboardViewModel.pagedActiveClips.collectAsStateWithLifecycle()
+                  val totalCount by clipboardViewModel.totalActiveClipCount.collectAsStateWithLifecycle()
                   val selectedIds by clipboardViewModel.selectedClipIds.collectAsStateWithLifecycle()
+                  val storageStats by clipboardViewModel.storageStats.collectAsStateWithLifecycle()
                   AllClipsScreen(
-                    clips = activeClips,
+                    clips = pagedClips,
+                    totalActiveCount = totalCount,
                     categories = categories,
                     selectedClipIds = selectedIds,
+                    storageStats = storageStats,
+                    onLoadMore = clipboardViewModel::loadMorePagedClips,
+                    onOpenBackupSync = { navigateTopLevel(BackupSyncRoute) },
+                    onOpenStorage = { navController.navigate(StorageCapacityRoute) },
                     onToggleSelection = clipboardViewModel::toggleSelection,
                     onSelectAll = clipboardViewModel::selectAll,
                     onClearSelection = clipboardViewModel::clearSelection,
@@ -592,6 +621,9 @@ fun SmartClipboardRoot(
                 composable<IntegrationsRoute> {
                   val telegramConfig by syncViewModel.telegramConfig.collectAsStateWithLifecycle()
                   val discordConfig by syncViewModel.discordConfig.collectAsStateWithLifecycle()
+                  val discordBotName by
+                    syncViewModel.discordVerifiedBotName.collectAsStateWithLifecycle()
+                  val discordGuilds by syncViewModel.discordGuilds.collectAsStateWithLifecycle()
                   val driveConfig by syncViewModel.googleDriveConfig.collectAsStateWithLifecycle()
                   val driveFolders by syncViewModel.driveFolders.collectAsStateWithLifecycle()
                   val syncBusy by syncViewModel.isBusy.collectAsStateWithLifecycle()
@@ -599,6 +631,8 @@ fun SmartClipboardRoot(
                     viewModel = syncViewModel,
                     telegramConfig = telegramConfig,
                     discordConfig = discordConfig,
+                    discordVerifiedBotName = discordBotName,
+                    discordGuilds = discordGuilds,
                     driveConfig = driveConfig,
                     driveFolders = driveFolders,
                     isBusy = syncBusy,
@@ -611,12 +645,14 @@ fun SmartClipboardRoot(
                   val driveConfig by syncViewModel.googleDriveConfig.collectAsStateWithLifecycle()
                   val driveBackups by syncViewModel.driveBackups.collectAsStateWithLifecycle()
                   val syncState by syncViewModel.syncState.collectAsStateWithLifecycle()
+                  val queueSummary by syncViewModel.queueSummary.collectAsStateWithLifecycle()
                   val syncLogs by syncViewModel.syncLogs.collectAsStateWithLifecycle()
                   val lastGlobalSyncAt by syncViewModel.lastGlobalSyncAt.collectAsStateWithLifecycle()
                   val syncBusy by syncViewModel.isBusy.collectAsStateWithLifecycle()
                   BackupSyncScreen(
                     viewModel = syncViewModel,
                     syncState = syncState,
+                    queueSummary = queueSummary,
                     syncLogs = syncLogs,
                     userSettings = settings,
                     telegramConfig = telegramConfig,
@@ -626,6 +662,52 @@ fun SmartClipboardRoot(
                     lastGlobalSyncAt = lastGlobalSyncAt,
                     isBusy = syncBusy,
                     onOpenIntegrations = { navController.navigate(IntegrationsRoute) },
+                    onOpenRecoveryCenter = { navController.navigate(CloudRecoveryRoute) },
+                    onOpenStorageManager = { navController.navigate(StorageCapacityRoute) },
+                  )
+                }
+
+                composable<CloudRecoveryRoute> {
+                  val healthSummaries by recoveryViewModel.healthSummaries.collectAsStateWithLifecycle()
+                  val scanResult by recoveryViewModel.scanResult.collectAsStateWithLifecycle()
+                  val selectedRemoteIds by
+                    recoveryViewModel.selectedRemoteIds.collectAsStateWithLifecycle()
+                  val conflictResolutions by
+                    recoveryViewModel.conflictResolutions.collectAsStateWithLifecycle()
+                  val recoveryBusy by recoveryViewModel.isBusy.collectAsStateWithLifecycle()
+                  RecoveryCenterScreen(
+                    healthSummaries = healthSummaries,
+                    scanResult = scanResult,
+                    selectedRemoteIds = selectedRemoteIds,
+                    conflictResolutions = conflictResolutions,
+                    isBusy = recoveryBusy,
+                    onScanAll = { recoveryViewModel.scanProviders() },
+                    onToggleSelect = recoveryViewModel::toggleItemSelection,
+                    onSelectMissingOnly = recoveryViewModel::selectAllMissing,
+                    onSetConflictResolution = recoveryViewModel::setConflictResolution,
+                    onRestoreSelected = recoveryViewModel::restoreSelected,
+                    onRestoreAllMissing = recoveryViewModel::restoreAllMissing,
+                  )
+                }
+
+                composable<StorageCapacityRoute> {
+                  val storageStats by clipboardViewModel.storageStats.collectAsStateWithLifecycle()
+                  LaunchedEffect(
+                    settings.storageSoftQuotaMb,
+                    settings.storageWarnThreshold1,
+                    settings.storageWarnThreshold2,
+                    settings.storageWarnThreshold3,
+                  ) {
+                    clipboardViewModel.refreshStorageStats()
+                  }
+                  StorageCapacityScreen(
+                    stats = storageStats,
+                    settings = settings,
+                    onUpdateQuotaMb = settingsViewModel::setStorageSoftQuotaMb,
+                    onUpdateThresholds = settingsViewModel::setStorageWarnThresholds,
+                    onDeleteSelected = clipboardViewModel::deleteClipsFromStorage,
+                    onEmptyTrash = clipboardViewModel::emptyTrash,
+                    onBackupNow = { navigateTopLevel(BackupSyncRoute) },
                   )
                 }
 
@@ -639,6 +721,14 @@ fun SmartClipboardRoot(
                     onRetentionDaysChange = settingsViewModel::setRetentionDays,
                     onClearSystemClipboard = settingsViewModel::clearSystemClipboard,
                     onWipeAllData = settingsViewModel::wipeAllData,
+                    onInstantAutoSaveToggle = settingsViewModel::setInstantAutoSave,
+                    onAutoDetectSensitiveToggle =
+                      settingsViewModel::setAutoDetectSensitivePatterns,
+                    onBlockSensitiveSyncToggle = settingsViewModel::setBlockSensitiveCloudSync,
+                    onSkipAutoSaveSensitiveToggle = settingsViewModel::setSkipAutoSaveSensitive,
+                    onSaveExcludedAppsCsv = settingsViewModel::setExcludedSourceAppsCsv,
+                    onDeleteCloudToggle = settingsViewModel::setDeleteCloudOnLocalDelete,
+                    onOpenStorageManager = { navController.navigate(StorageCapacityRoute) },
                   )
                 }
 
@@ -698,6 +788,7 @@ fun SmartClipboardRoot(
             )
           },
         )
+      }
       }
     }
   }

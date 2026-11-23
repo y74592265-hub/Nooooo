@@ -33,6 +33,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,16 +53,24 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.domain.model.Category
 import com.example.domain.model.ClipItem
+import com.example.domain.model.StorageCapacityStats
+import com.example.domain.model.StorageThresholdLevel
 import com.example.ui.components.ClipCard
 import com.example.ui.components.EmptyStateView
+import com.example.ui.components.StorageCapacityBanner
 import com.example.ui.components.localizedCategoryName
 import com.example.ui.theme.AppSpacing
 
 @Composable
 fun AllClipsScreen(
   clips: List<ClipItem>,
+  totalActiveCount: Int = clips.size,
   categories: List<Category>,
   selectedClipIds: Set<Long>,
+  storageStats: StorageCapacityStats? = null,
+  onLoadMore: () -> Unit = {},
+  onOpenBackupSync: () -> Unit = {},
+  onOpenStorage: () -> Unit = {},
   onToggleSelection: (Long) -> Unit,
   onSelectAll: (List<Long>) -> Unit,
   onClearSelection: () -> Unit,
@@ -84,6 +93,7 @@ fun AllClipsScreen(
       if (filterCategoryId == null) clips else clips.filter { it.categoryId == filterCategoryId }
     }
   val inSelectionMode = selectedClipIds.isNotEmpty()
+  val remainingCount = (totalActiveCount - clips.size).coerceAtLeast(0)
 
   Column(modifier = modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
     Column(modifier = Modifier.fillMaxSize().widthIn(max = AppSpacing.maxContentWidth)) {
@@ -174,7 +184,7 @@ fun AllClipsScreen(
           FilterChip(
             selected = filterCategoryId == null,
             onClick = { filterCategoryId = null },
-            label = { Text("${stringResource(R.string.filter_all)} (${clips.size})") },
+            label = { Text("${stringResource(R.string.filter_all)} ($totalActiveCount)") },
           )
           categories.forEach { cat ->
             FilterChip(
@@ -195,6 +205,15 @@ fun AllClipsScreen(
         }
       }
 
+      if (storageStats != null && storageStats.thresholdLevel != StorageThresholdLevel.NORMAL) {
+        StorageCapacityBanner(
+          stats = storageStats,
+          onBackupNow = onOpenBackupSync,
+          onManageStorage = onOpenStorage,
+          modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+      }
+
       if (filtered.isEmpty()) {
         EmptyStateView(
           title = stringResource(R.string.empty_clips_title),
@@ -212,6 +231,15 @@ fun AllClipsScreen(
           contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
           verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+          if (remainingCount > 0) {
+            item {
+              Text(
+                text = stringResource(R.string.clips_showing_count, clips.size, totalActiveCount),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+          }
           items(filtered, key = { it.id }) { clip ->
             ClipCard(
               clip = clip,
@@ -226,6 +254,16 @@ fun AllClipsScreen(
               onPinToggle = { onTogglePin(clip) },
               onFavoriteToggle = { onToggleFavorite(clip) },
             )
+          }
+          if (remainingCount > 0) {
+            item {
+              OutlinedButton(
+                onClick = onLoadMore,
+                modifier = Modifier.fillMaxWidth().testTag("load_more_clips_btn"),
+              ) {
+                Text(stringResource(R.string.clips_load_more, remainingCount))
+              }
+            }
           }
           item { Spacer(modifier = Modifier.height(76.dp)) }
         }

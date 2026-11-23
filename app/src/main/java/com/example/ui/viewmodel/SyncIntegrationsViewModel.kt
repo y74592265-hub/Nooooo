@@ -9,6 +9,7 @@ import com.example.core.sync.SyncEngine
 import com.example.core.sync.SyncEngineState
 import com.example.domain.model.DiscordConfig
 import com.example.domain.model.GoogleDriveConfig
+import com.example.domain.model.QueueSummary
 import com.example.domain.model.SyncLog
 import com.example.domain.model.SyncProviderId
 import com.example.domain.model.TelegramConfig
@@ -16,7 +17,9 @@ import com.example.domain.repository.SyncLogRepository
 import com.example.domain.usecase.ExportFormat
 import com.example.domain.usecase.ExportImportUseCase
 import com.example.integrations.ProviderResult
+import com.example.integrations.discord.DiscordGuildSummary
 import com.example.integrations.discord.DiscordProvider
+import com.example.integrations.discord.DiscordRole
 import com.example.integrations.gdrive.DriveAuthState
 import com.example.integrations.gdrive.DriveFileDto
 import com.example.integrations.gdrive.GoogleDriveAuthHelper
@@ -65,6 +68,11 @@ constructor(
 
   val syncState: StateFlow<SyncEngineState> = syncEngine.state
 
+  val queueSummary: StateFlow<QueueSummary> =
+    syncEngine
+      .observeQueueSummary()
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QueueSummary())
+
   val syncLogs: StateFlow<List<SyncLog>> =
     syncLogRepository
       .observeRecentLogs()
@@ -85,6 +93,15 @@ constructor(
 
   private val _driveFolders = MutableStateFlow<List<DriveFileDto>>(emptyList())
   val driveFolders: StateFlow<List<DriveFileDto>> = _driveFolders.asStateFlow()
+
+  private val _discordVerifiedBotName = MutableStateFlow<String?>(null)
+  val discordVerifiedBotName: StateFlow<String?> = _discordVerifiedBotName.asStateFlow()
+
+  private val _discordGuilds = MutableStateFlow<List<DiscordGuildSummary>>(emptyList())
+  val discordGuilds: StateFlow<List<DiscordGuildSummary>> = _discordGuilds.asStateFlow()
+
+  private val _discordRoles = MutableStateFlow<List<DiscordRole>>(emptyList())
+  val discordRoles: StateFlow<List<DiscordRole>> = _discordRoles.asStateFlow()
 
   private val _isBusy = MutableStateFlow(false)
   val isBusy: StateFlow<Boolean> = _isBusy.asStateFlow()
@@ -154,6 +171,71 @@ constructor(
       runBusyAction {
         when (val res = discordProvider.testConnection()) {
           is ProviderResult.Success -> _statusMessages.emit(UiText.Dynamic(res.data))
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+        }
+      }
+    }
+  }
+
+  fun verifyDiscordBotAndFetchGuilds(botToken: String) {
+    viewModelScope.launch {
+      runBusyAction {
+        when (val res = discordProvider.verifyBotAndFetchGuilds(botToken)) {
+          is ProviderResult.Success -> {
+            _discordVerifiedBotName.value = res.data.botUsername
+            _discordGuilds.value = res.data.guilds
+            _statusMessages.emit(
+              UiText.Resource(
+                R.string.msg_discord_bot_verified,
+                listOf(res.data.botUsername, res.data.guilds.size),
+              )
+            )
+          }
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+        }
+      }
+    }
+  }
+
+  fun fetchDiscordGuildRoles(botToken: String, guildId: String) {
+    viewModelScope.launch {
+      runBusyAction {
+        when (val res = discordProvider.fetchGuildRoles(botToken, guildId)) {
+          is ProviderResult.Success -> _discordRoles.value = res.data
+          is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
+        }
+      }
+    }
+  }
+
+  fun createDiscordPrivateVault(
+    botToken: String,
+    guildId: String,
+    guildName: String,
+    channelName: String,
+    allowedUserId: String,
+    allowedRoleId: String,
+  ) {
+    viewModelScope.launch {
+      runBusyAction {
+        when (
+          val res =
+            discordProvider.createOrLinkPrivateVaultChannel(
+              rawBotToken = botToken,
+              guildId = guildId,
+              guildName = guildName,
+              channelName = channelName,
+              allowedUserId = allowedUserId,
+              allowedRoleId = allowedRoleId,
+            )
+        ) {
+          is ProviderResult.Success ->
+            _statusMessages.emit(
+              UiText.Resource(
+                R.string.msg_discord_vault_created,
+                listOf(res.data.name ?: channelName),
+              )
+            )
           is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
         }
       }
@@ -255,10 +337,10 @@ constructor(
     }
   }
 
-  fun backupToDriveNow(passphrase: String?) {
+  fun backupToDriveNow(passphrase: String?, incrementalIfPossible: Boolean = false) {
     viewModelScope.launch {
       runBusyAction {
-        when (val res = googleDriveProvider.backupNow(passphrase)) {
+        when (val res = googleDriveProvider.backupNow(passphrase, incrementalIfPossible)) {
           is ProviderResult.Success -> {
             _statusMessages.emit(
               UiText.Resource(R.string.msg_drive_backup_saved, listOf(res.detail))
@@ -290,6 +372,13 @@ constructor(
           is ProviderResult.Error -> _statusMessages.emit(UiText.Dynamic(res.message))
         }
       }
+    }
+  }
+
+  fun retryFailedQueue(providerId: SyncProviderId? = null) {
+    viewModelScope.launch {
+      syncEngine.retryFailedQueueJobs(providerId)
+      _statusMessages.emit(UiText.Resource(R.string.msg_queue_requeued))
     }
   }
 

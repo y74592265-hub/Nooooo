@@ -53,6 +53,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDirection
@@ -100,6 +102,8 @@ fun ClipDetailsScreen(
   }
 
   val context = LocalContext.current
+  val textToolbar = LocalTextToolbar.current
+  val focusManager = LocalFocusManager.current
   var showEditSheet by remember { mutableStateOf(false) }
   var revealSensitive by remember(clip.id, clip.isSensitive) { mutableStateOf(!clip.isSensitive) }
   val category = categories.find { it.id == clip.categoryId }
@@ -132,12 +136,19 @@ fun ClipDetailsScreen(
         ) {
           ContentTypeBadge(clip.contentType)
           AssistChip(
-            onClick = { showEditSheet = true },
+            onClick = {
+              textToolbar.hide()
+              focusManager.clearFocus()
+              showEditSheet = true
+            },
             label = { Text(localizedCategoryName(category)) },
           )
           if (clip.isSensitive) {
             AssistChip(
-              onClick = { revealSensitive = !revealSensitive },
+              onClick = {
+                textToolbar.hide()
+                revealSensitive = !revealSensitive
+              },
               leadingIcon = {
                 Icon(
                   if (revealSensitive) Icons.Filled.LockOpen else Icons.Filled.Lock,
@@ -247,7 +258,10 @@ fun ClipDetailsScreen(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
       ) {
         Button(
-          onClick = { onCopy(clip) },
+          onClick = {
+            textToolbar.hide()
+            onCopy(clip)
+          },
           modifier = Modifier.weight(1f).testTag("details_copy_btn"),
         ) {
           Icon(Icons.Filled.ContentCopy, null, Modifier.size(18.dp))
@@ -255,7 +269,11 @@ fun ClipDetailsScreen(
           Text(stringResource(R.string.action_copy))
         }
         OutlinedButton(
-          onClick = { showEditSheet = true },
+          onClick = {
+            textToolbar.hide()
+            focusManager.clearFocus()
+            showEditSheet = true
+          },
           modifier = Modifier.weight(1f).testTag("details_edit_btn"),
         ) {
           Icon(Icons.Filled.Edit, null, Modifier.size(18.dp))
@@ -270,6 +288,8 @@ fun ClipDetailsScreen(
       ) {
         OutlinedButton(
           onClick = {
+            textToolbar.hide()
+            focusManager.clearFocus()
             val sendIntent =
               Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
@@ -340,7 +360,11 @@ fun ClipDetailsScreen(
       }
 
       OutlinedButton(
-        onClick = { onDelete(clip.id) },
+        onClick = {
+          textToolbar.hide()
+          focusManager.clearFocus()
+          onDelete(clip.id)
+        },
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
         modifier = Modifier.fillMaxWidth().testTag("details_delete_btn"),
       ) {

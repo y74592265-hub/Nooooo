@@ -11,9 +11,15 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class SystemClipboardSnapshot(
+  val text: String,
+  val isSystemSensitive: Boolean = false,
+  val sourcePackageHint: String? = null,
+)
+
 /**
  * Policy-compliant Android ClipboardManager wrapper.
- * - Reads system clipboard only when app is in foreground with window focus (Android 10+ rule).
+ * - Reads system clipboard when app has window focus or via active IME listener (Android 10+ rule).
  * - Flags sensitive copied clips with EXTRA_IS_SENSITIVE (Android 13+ preview masking).
  * - Auto-classifies text into LINK, CODE, ADDRESS, NOTE, or TEXT.
  */
@@ -39,13 +45,34 @@ class SystemClipboardHelper @Inject constructor(@ApplicationContext private val 
     cm.setPrimaryClip(clip)
   }
 
-  fun readCurrentClipboardText(): String? {
+  fun readCurrentClipboardText(): String? = readCurrentClipboardSnapshot()?.text
+
+  fun readCurrentClipboardSnapshot(): SystemClipboardSnapshot? {
     val cm = clipboardManager ?: return null
     if (!cm.hasPrimaryClip()) return null
     val clip = cm.primaryClip ?: return null
     if (clip.itemCount <= 0) return null
     val text = clip.getItemAt(0).coerceToText(context)?.toString()?.trim()
-    return text?.takeIf { it.isNotEmpty() }
+    if (text.isNullOrEmpty()) return null
+    val extras = clip.description?.extras
+    val sensitiveFlag =
+      extras?.getBoolean(
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ClipDescription.EXTRA_IS_SENSITIVE
+        else "android.content.extra.IS_SENSITIVE",
+        false,
+      ) == true || extras?.getBoolean("android.content.extra.IS_SENSITIVE", false) == true
+    return SystemClipboardSnapshot(text = text, isSystemSensitive = sensitiveFlag)
+  }
+
+  fun registerPrimaryClipListener(
+    listener: ClipboardManager.OnPrimaryClipChangedListener
+  ): ClipboardManager.OnPrimaryClipChangedListener {
+    clipboardManager?.addPrimaryClipChangedListener(listener)
+    return listener
+  }
+
+  fun unregisterPrimaryClipListener(listener: ClipboardManager.OnPrimaryClipChangedListener) {
+    clipboardManager?.removePrimaryClipChangedListener(listener)
   }
 
   fun clearSystemClipboard() {

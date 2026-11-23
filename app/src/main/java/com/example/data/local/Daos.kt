@@ -5,14 +5,38 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import com.example.domain.model.ClipContentType
+import com.example.domain.model.ClipSyncState
+import com.example.domain.model.SyncProviderId
+import com.example.domain.model.SyncQueueStatus
 import kotlinx.coroutines.flow.Flow
+
+data class StorageAggregateRow(
+  val totalCount: Int,
+  val activeCount: Int,
+  val trashedCount: Int,
+  val sensitiveCount: Int,
+  val pendingSyncCount: Int,
+  val failedSyncCount: Int,
+  val totalContentBytes: Long,
+  val trashedBytes: Long,
+)
+
+data class QueueStatusCountRow(
+  val status: SyncQueueStatus,
+  val itemCount: Int,
+)
 
 @Dao
 interface ClipDao {
-  @Query(
-    "SELECT * FROM clips WHERE isTrashed = 0 ORDER BY isPinned DESC, updatedAt DESC"
-  )
+  @Query("SELECT * FROM clips WHERE isTrashed = 0 ORDER BY isPinned DESC, updatedAt DESC")
   fun observeActiveClips(): Flow<List<ClipEntity>>
+
+  @Query("SELECT * FROM clips WHERE isTrashed = 0 ORDER BY isPinned DESC, updatedAt DESC LIMIT :limit")
+  fun observeActiveClipsPaged(limit: Int): Flow<List<ClipEntity>>
+
+  @Query("SELECT COUNT(*) FROM clips WHERE isTrashed = 0")
+  fun observeTotalActiveCount(): Flow<Int>
 
   @Query("SELECT * FROM clips WHERE isTrashed = 0 AND isFavorite = 1 ORDER BY isPinned DESC, updatedAt DESC")
   fun observeFavoriteClips(): Flow<List<ClipEntity>>
@@ -22,6 +46,11 @@ interface ClipDao {
 
   @Query("SELECT * FROM clips WHERE isTrashed = 0 AND categoryId = :categoryId ORDER BY isPinned DESC, updatedAt DESC")
   fun observeClipsByCategory(categoryId: Long): Flow<List<ClipEntity>>
+
+  @Query(
+    "SELECT * FROM clips WHERE isTrashed = 0 AND categoryId = :categoryId ORDER BY isPinned DESC, updatedAt DESC LIMIT :limit"
+  )
+  fun observeClipsByCategoryPaged(categoryId: Long, limit: Int): Flow<List<ClipEntity>>
 
   @Query("SELECT * FROM clips WHERE id = :id LIMIT 1")
   fun observeClipById(id: Long): Flow<ClipEntity?>
@@ -38,8 +67,93 @@ interface ClipDao {
   @Query("SELECT * FROM clips WHERE isTrashed = 0 ORDER BY updatedAt DESC")
   suspend fun getAllActiveClipsOnce(): List<ClipEntity>
 
+  @Query("SELECT * FROM clips WHERE isTrashed = 0 ORDER BY isPinned DESC, updatedAt DESC LIMIT :limit OFFSET :offset")
+  suspend fun getActiveClipsPaged(limit: Int, offset: Int): List<ClipEntity>
+
   @Query("SELECT * FROM clips ORDER BY updatedAt DESC LIMIT :limit OFFSET :offset")
   suspend fun getClipsPaged(limit: Int, offset: Int): List<ClipEntity>
+
+  @Query(
+    """
+    SELECT clips.* FROM clips
+    JOIN clips_fts ON clips.id = clips_fts.rowid
+    WHERE clips.isTrashed = 0
+      AND clips_fts MATCH :ftsQuery
+      AND (:categoryId IS NULL OR clips.categoryId = :categoryId)
+      AND (:contentType IS NULL OR clips.contentType = :contentType)
+      AND clips.updatedAt >= :minTimestamp
+      AND (:favoritesOnly = 0 OR clips.isFavorite = 1)
+    ORDER BY clips.isPinned DESC, clips.updatedAt DESC
+    LIMIT :limit
+    """
+  )
+  suspend fun searchFtsFiltered(
+    ftsQuery: String,
+    categoryId: Long?,
+    contentType: ClipContentType?,
+    minTimestamp: Long,
+    favoritesOnly: Int,
+    limit: Int,
+  ): List<ClipEntity>
+
+  @Query(
+    """
+    SELECT * FROM clips
+    WHERE isTrashed = 0
+      AND (:categoryId IS NULL OR categoryId = :categoryId)
+      AND (:contentType IS NULL OR contentType = :contentType)
+      AND updatedAt >= :minTimestamp
+      AND (:favoritesOnly = 0 OR isFavorite = 1)
+    ORDER BY isPinned DESC, updatedAt DESC
+    LIMIT :limit
+    """
+  )
+  suspend fun filterActiveClipsIndexed(
+    categoryId: Long?,
+    contentType: ClipContentType?,
+    minTimestamp: Long,
+    favoritesOnly: Int,
+    limit: Int,
+  ): List<ClipEntity>
+
+  @Query(
+    """
+    SELECT * FROM clips
+    WHERE isTrashed = 0
+      AND isSensitive = 1
+      AND (:categoryId IS NULL OR categoryId = :categoryId)
+      AND (:contentType IS NULL OR contentType = :contentType)
+      AND updatedAt >= :minTimestamp
+      AND (:favoritesOnly = 0 OR isFavorite = 1)
+    ORDER BY updatedAt DESC
+    LIMIT 200
+    """
+  )
+  suspend fun getSensitiveActiveClipsFiltered(
+    categoryId: Long?,
+    contentType: ClipContentType?,
+    minTimestamp: Long,
+    favoritesOnly: Int,
+  ): List<ClipEntity>
+
+  @Query("SELECT * FROM clips WHERE isTrashed = 0 ORDER BY contentSizeBytes DESC, updatedAt DESC LIMIT :limit")
+  suspend fun getLargestClips(limit: Int): List<ClipEntity>
+
+  @Query(
+    """
+    SELECT
+      COUNT(*) AS totalCount,
+      COALESCE(SUM(CASE WHEN isTrashed = 0 THEN 1 ELSE 0 END), 0) AS activeCount,
+      COALESCE(SUM(CASE WHEN isTrashed = 1 THEN 1 ELSE 0 END), 0) AS trashedCount,
+      COALESCE(SUM(CASE WHEN isTrashed = 0 AND isSensitive = 1 THEN 1 ELSE 0 END), 0) AS sensitiveCount,
+      COALESCE(SUM(CASE WHEN isTrashed = 0 AND syncStatus IN ('PENDING', 'UPLOADING') THEN 1 ELSE 0 END), 0) AS pendingSyncCount,
+      COALESCE(SUM(CASE WHEN isTrashed = 0 AND syncStatus IN ('FAILED', 'CONFLICT') THEN 1 ELSE 0 END), 0) AS failedSyncCount,
+      COALESCE(SUM(contentSizeBytes), 0) AS totalContentBytes,
+      COALESCE(SUM(CASE WHEN isTrashed = 1 THEN contentSizeBytes ELSE 0 END), 0) AS trashedBytes
+    FROM clips
+    """
+  )
+  suspend fun getStorageAggregateSnapshot(): StorageAggregateRow
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertClip(clip: ClipEntity): Long
@@ -55,6 +169,33 @@ interface ClipDao {
 
   @Query("UPDATE clips SET remoteId = :remoteId WHERE id = :id")
   suspend fun updateRemoteId(id: Long, remoteId: String)
+
+  @Query(
+    """
+    UPDATE clips
+    SET syncStatus = :syncStatus,
+        syncError = :syncError,
+        lastSyncedAt = COALESCE(:syncedAt, lastSyncedAt),
+        telegramMessageId = COALESCE(:telegramMsgId, telegramMessageId),
+        discordMessageId = COALESCE(:discordMsgId, discordMessageId),
+        driveRevisionId = COALESCE(:driveRevId, driveRevisionId),
+        remoteId = COALESCE(:remoteId, remoteId)
+    WHERE id = :id
+    """
+  )
+  suspend fun updateSyncMetadata(
+    id: Long,
+    syncStatus: ClipSyncState,
+    syncError: String?,
+    syncedAt: Long?,
+    telegramMsgId: String?,
+    discordMsgId: String?,
+    driveRevId: String?,
+    remoteId: String?,
+  )
+
+  @Query("UPDATE clips SET syncStatus = :syncStatus, syncError = :syncError WHERE id = :id")
+  suspend fun updateSyncStatus(id: Long, syncStatus: ClipSyncState, syncError: String?)
 
   @Query("UPDATE clips SET categoryId = :categoryId, updatedAt = :updatedAt WHERE id IN (:ids)")
   suspend fun moveClipsToCategory(ids: List<Long>, categoryId: Long, updatedAt: Long)
@@ -76,6 +217,89 @@ interface ClipDao {
 
   @Query("DELETE FROM clips")
   suspend fun deleteAllClips()
+}
+
+@Dao
+interface SyncQueueDao {
+  @Query("SELECT status, COUNT(*) AS itemCount FROM sync_queue GROUP BY status")
+  fun observeQueueSummary(): Flow<List<QueueStatusCountRow>>
+
+  @Query("SELECT status, COUNT(*) AS itemCount FROM sync_queue WHERE provider = :provider GROUP BY status")
+  fun observeQueueSummaryForProvider(provider: SyncProviderId): Flow<List<QueueStatusCountRow>>
+
+  @Query("SELECT * FROM sync_queue ORDER BY updatedAt DESC LIMIT 200")
+  fun observeAllJobs(): Flow<List<SyncQueueEntity>>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertJob(item: SyncQueueEntity): Long
+
+  @Query(
+    """
+    SELECT * FROM sync_queue
+    WHERE provider = :provider
+      AND status IN ('PENDING', 'FAILED')
+      AND nextRetryAt <= :now
+    ORDER BY createdAt ASC
+    LIMIT :limit
+    """
+  )
+  suspend fun getDueJobs(provider: SyncProviderId, now: Long, limit: Int): List<SyncQueueEntity>
+
+  @Query(
+    """
+    SELECT * FROM sync_queue
+    WHERE status IN ('PENDING', 'FAILED')
+      AND nextRetryAt <= :now
+    ORDER BY createdAt ASC
+    LIMIT :limit
+    """
+  )
+  suspend fun getAllDueJobs(now: Long, limit: Int): List<SyncQueueEntity>
+
+  @Query(
+    "SELECT * FROM sync_queue WHERE status IN ('PENDING', 'UPLOADING', 'FAILED')"
+  )
+  fun observeActiveQueueJobs(): Flow<List<SyncQueueEntity>>
+
+  @Query(
+    "UPDATE sync_queue SET status = 'PENDING', nextRetryAt = 0, updatedAt = :now WHERE status = 'FAILED' AND (:provider IS NULL OR provider = :provider)"
+  )
+  suspend fun requeueFailedJobs(provider: SyncProviderId?, now: Long)
+
+  @Query("UPDATE sync_queue SET status = 'UPLOADING', updatedAt = :now WHERE id = :id")
+  suspend fun markUploading(id: Long, now: Long)
+
+  @Query("UPDATE sync_queue SET status = 'SYNCED', lastError = NULL, updatedAt = :now WHERE id = :id")
+  suspend fun markSynced(id: Long, now: Long)
+
+  @Query(
+    """
+    UPDATE sync_queue
+    SET status = :status,
+        retryCount = :retryCount,
+        nextRetryAt = :nextRetryAt,
+        lastError = :error,
+        updatedAt = :now
+    WHERE id = :id
+    """
+  )
+  suspend fun markFailed(
+    id: Long,
+    status: SyncQueueStatus,
+    retryCount: Int,
+    nextRetryAt: Long,
+    error: String?,
+    now: Long,
+  )
+
+  @Query("DELETE FROM sync_queue WHERE clipId IN (:clipIds)")
+  suspend fun deleteForClips(clipIds: List<Long>)
+
+  @Query("DELETE FROM sync_queue WHERE status = 'SYNCED'")
+  suspend fun clearCompleted()
+
+  @Query("DELETE FROM sync_queue")
+  suspend fun clearAll()
 }
 
 data class CategoryCountRow(

@@ -15,10 +15,22 @@ enum class ClipContentType {
 enum class ClipSource {
   MANUAL,
   CLIPBOARD,
+  IME,
   SHARE_SHEET,
   TELEGRAM,
   DISCORD,
+  GOOGLE_DRIVE,
   RESTORE,
+}
+
+@Serializable
+enum class ClipSyncState {
+  LOCAL_ONLY,
+  PENDING,
+  UPLOADING,
+  SYNCED,
+  FAILED,
+  CONFLICT,
 }
 
 data class ClipItem(
@@ -38,6 +50,13 @@ data class ClipItem(
   val updatedAt: Long = System.currentTimeMillis(),
   val source: ClipSource = ClipSource.MANUAL,
   val remoteId: String? = null,
+  val syncStatus: ClipSyncState = ClipSyncState.LOCAL_ONLY,
+  val contentSizeBytes: Long = content.toByteArray().size.toLong(),
+  val telegramMessageId: String? = null,
+  val discordMessageId: String? = null,
+  val driveRevisionId: String? = null,
+  val lastSyncedAt: Long? = null,
+  val syncError: String? = null,
 )
 
 object CategoryDefaults {

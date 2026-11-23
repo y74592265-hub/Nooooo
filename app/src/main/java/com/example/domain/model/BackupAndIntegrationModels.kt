@@ -17,6 +17,7 @@ data class BackupClipDto(
   val createdAt: Long,
   val updatedAt: Long,
   val source: ClipSource = ClipSource.RESTORE,
+  val remoteId: String? = null,
 )
 
 @Serializable
@@ -29,7 +30,9 @@ data class BackupCategoryDto(
 
 @Serializable
 data class BackupPayload(
-  val schemaVersion: Int = 1,
+  val schemaVersion: Int = 2,
+  val isIncremental: Boolean = false,
+  val baseBackupFileId: String? = null,
   val exportedAt: Long = System.currentTimeMillis(),
   val appVersion: String = "1.0",
   val categories: List<BackupCategoryDto> = emptyList(),
@@ -63,6 +66,11 @@ data class DiscordConfig(
   val webhookUrl: String = "",
   val botToken: String = "",
   val channelId: String = "",
+  val channelName: String = "",
+  val selectedGuildId: String = "",
+  val selectedGuildName: String = "",
+  val allowedUserId: String = "",
+  val allowedRoleId: String = "",
   val autoSync: Boolean = false,
   val lastMessageId: String? = null,
   val lastSyncAt: Long? = null,
@@ -73,12 +81,14 @@ data class DiscordConfig(
 data class GoogleDriveConfig(
   val enabled: Boolean = false,
   val accountEmail: String = "",
-  val useAppDataFolder: Boolean = true,
+  val useAppDataFolder: Boolean = false,
   val selectedFolderId: String? = null,
-  val selectedFolderName: String = "App Data Folder",
+  val selectedFolderName: String = "Smart Clipboard Backup",
   val encryptBackups: Boolean = true,
   val autoBackup: Boolean = false,
+  val autoIncrementalBackup: Boolean = true,
   val lastBackupAt: Long? = null,
   val lastBackupFileId: String? = null,
+  val lastBackupHashCount: Int = 0,
   val lastStatus: String = "",
 )

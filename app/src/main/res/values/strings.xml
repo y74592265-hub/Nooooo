@@ -266,4 +266,125 @@
     <string name="msg_restore_failed">Restore failed: %1$s</string>
     <string name="msg_autosync_scheduled">Background sync scheduled every %1$dh</string>
     <string name="msg_autosync_paused">Background sync paused</string>
+    <string name="msg_queue_requeued">Re-queued failed sync items for retry</string>
+    <string name="msg_sensitive_skipped">Sensitive clipboard item skipped per privacy setting</string>
+    <string name="msg_marked_sensitive_local">Encrypted locally and blocked from cloud sync</string>
+    <string name="msg_exclusions_saved">Exclusion rules saved</string>
+    <string name="msg_discord_bot_verified">Verified bot @%1$s across %2$d server(s)</string>
+    <string name="msg_discord_vault_created">Private Discord vault #%1$s ready</string>
+
+    <!-- Companion IME -->
+    <string name="ime_service_name">Smart Clipboard Helper</string>
+    <string name="ime_bar_title">Smart Clipboard IME</string>
+    <string name="ime_bar_hint">Tap a recent snippet to paste, or capture system clipboard</string>
+    <string name="ime_bar_empty">No recent non-sensitive snippets yet</string>
+    <string name="ime_switch_keyboard">Switch Keyboard</string>
+
+    <!-- Navigation Additions -->
+    <string name="nav_cloud_recovery">Cloud Recovery</string>
+    <string name="nav_storage_capacity">Storage</string>
+
+    <!-- Clip Sync State Badges -->
+    <string name="sync_badge_local">Local only</string>
+    <string name="sync_badge_pending">Pending</string>
+    <string name="sync_badge_uploading">Uploading</string>
+    <string name="sync_badge_synced">Synced</string>
+    <string name="sync_badge_failed">Failed</string>
+    <string name="sync_badge_conflict">Conflict</string>
+
+    <!-- Home Instant Capture & Banners -->
+    <string name="home_auto_saved_title">Auto-captured to vault</string>
+    <string name="home_auto_saved_sensitive">Sensitive item encrypted locally (%1$s)</string>
+    <string name="home_action_undo">Undo</string>
+    <string name="home_action_mark_sensitive">Mark Sensitive</string>
+    <string name="home_recovery_chip">Recovery</string>
+    <string name="home_storage_chip">Storage</string>
+    <string name="clips_load_more">Load more (%1$d remaining)</string>
+    <string name="clips_showing_count">Showing %1$d of %2$d</string>
+
+    <!-- Discord Private Vault Setup -->
+    <string name="discord_vault_wizard_title">Private Vault Channel Setup</string>
+    <string name="discord_vault_wizard_subtitle">Uses Official Discord Bot API only (User Tokens rejected). Denies @everyone and grants access only to your Bot and optional IDs.</string>
+    <string name="discord_verify_bot_btn">Verify Bot &amp; Load Servers</string>
+    <string name="discord_pick_server_label">Select Target Discord Server:</string>
+    <string name="discord_perm_ready">Manage Channels Ready</string>
+    <string name="discord_perm_missing">Missing Manage Channels permission</string>
+    <string name="discord_vault_channel_name_label">Private Channel Name</string>
+    <string name="discord_allowed_user_id_label">Allowed Discord User ID (Optional)</string>
+    <string name="discord_allowed_role_id_label">Allowed Discord Role ID (Optional)</string>
+    <string name="discord_create_vault_btn">Create / Link Private Vault</string>
+    <string name="discord_advanced_webhook_title">Webhook Fallback / Direct Channel ID</string>
+
+    <!-- Google Drive Additions -->
+    <string name="drive_auto_incremental_toggle">Prefer Incremental Backups (Deltas)</string>
+    <string name="drive_backup_delta_now">Incremental Backup</string>
+
+    <!-- Sync Queue & Hub Links -->
+    <string name="sync_queue_summary_title">Persistent Sync Queue</string>
+    <string name="sync_queue_counts">Pending: %1$d • Uploading: %2$d • Failed: %3$d</string>
+    <string name="sync_queue_retry_btn">Retry Failed</string>
+    <string name="sync_open_recovery_btn">Cloud Recovery Center</string>
+    <string name="sync_open_storage_btn">Storage Capacity Manager</string>
+
+    <!-- Cloud Recovery Center -->
+    <string name="recovery_subtitle">Inspect Telegram, Discord Vault, and Google Drive items before merging without duplicating existing clips.</string>
+    <string name="recovery_health_title">Provider Health</string>
+    <string name="recovery_scan_all_btn">Scan Cloud Providers</string>
+    <string name="recovery_restore_selected_btn">Restore Selected (%1$d)</string>
+    <string name="recovery_restore_missing_btn">Restore All Missing</string>
+    <string name="recovery_select_missing">Select Missing Only</string>
+    <string name="recovery_status_new">Missing Locally</string>
+    <string name="recovery_status_synced">Already Synced</string>
+    <string name="recovery_status_local_newer">Local Newer</string>
+    <string name="recovery_status_conflict">Conflict</string>
+    <string name="recovery_conflict_keep_local">Keep Local</string>
+    <string name="recovery_conflict_keep_both">Keep Both</string>
+    <string name="recovery_conflict_overwrite">Use Cloud</string>
+    <string name="recovery_empty_title">Ready to Scan Cloud History</string>
+    <string name="recovery_empty_subtitle">Tap Scan Cloud Providers to inspect recoverable clips across Telegram, Discord, and Google Drive.</string>
+    <string name="recovery_scan_complete">Scanned %1$d remote item(s)</string>
+    <string name="recovery_apply_summary">Restored %1$d item(s), skipped %2$d already synced</string>
+
+    <!-- Storage Capacity Management -->
+    <string name="storage_subtitle">Track database usage, Trash overhead, pending sync safety, and largest clips.</string>
+    <string name="storage_used_format">%1$s used of %2$s quota (%3$d%%)</string>
+    <string name="storage_active_clips">Active Clips: %1$d (%2$s)</string>
+    <string name="storage_trash_clips">Trash: %1$d (%2$s)</string>
+    <string name="storage_db_size">Database Files: %1$s</string>
+    <string name="storage_device_free">Device Free Space: %1$s</string>
+    <string name="storage_unsynced_warning">%1$d item(s) have not finished syncing to cloud yet.</string>
+    <string name="storage_unsynced_protected">Protected: selected item(s) are not backed up to cloud yet.</string>
+    <string name="storage_thresholds_title">Capacity Warning Thresholds</string>
+    <string name="storage_quota_label">Vault Soft Quota</string>
+    <string name="storage_largest_clips_title">Largest Clips</string>
+    <string name="storage_delete_selected_safe">Move Safe Selected to Trash (%1$d)</string>
+    <string name="storage_delete_selected_force">Delete Including Unsynced (%1$d)</string>
+    <string name="storage_include_unsynced_confirm_title">Delete Unsynced Items?</string>
+    <string name="storage_include_unsynced_confirm_msg">Some selected clips have not synced to cloud yet. Move them to Trash anyway?</string>
+    <string name="storage_banner_70">Storage at %1$d%% of vault quota — consider backing up or reviewing large items.</string>
+    <string name="storage_banner_85">Storage at %1$d%% — clean up Trash or old large clips after syncing.</string>
+    <string name="storage_banner_95">Critical storage level (%1$d%%) — free space or raise quota to avoid delays.</string>
+    <string name="storage_action_backup">Backup Now</string>
+    <string name="storage_action_manage">Manage Storage</string>
+
+    <!-- Settings Additions -->
+    <string name="settings_group_capture_ime">Autonomous Capture &amp; Optional IME</string>
+    <string name="settings_instant_autosave_title">Instant Zero-Prompt Auto-Save</string>
+    <string name="settings_instant_autosave_subtitle">Save newly copied text directly on app focus without confirmation popups</string>
+    <string name="settings_ime_card_title">Optional Companion Clipboard Keyboard</string>
+    <string name="settings_ime_card_subtitle">Disabled by default. Enable in Android Keyboard Settings only if you want capture &amp; quick-paste while typing inside other apps on Android 10+.</string>
+    <string name="settings_ime_open_btn">Enable in Keyboard Settings</string>
+    <string name="settings_ime_picker_btn">Switch Keyboard</string>
+    <string name="settings_detect_sensitive_title">Auto-Detect Passwords, OTP &amp; Tokens</string>
+    <string name="settings_detect_sensitive_subtitle">Automatically encrypt OTP codes, API tokens, private keys, and system sensitive clips locally</string>
+    <string name="settings_block_sensitive_sync_title">Block Cloud Upload for Sensitive Items</string>
+    <string name="settings_block_sensitive_sync_subtitle">Keep passwords, OTP codes, and tokens offline as Local-Only</string>
+    <string name="settings_skip_sensitive_save_title">Ignore Sensitive Clipboard Content</string>
+    <string name="settings_skip_sensitive_save_subtitle">Do not store detected passwords or OTPs in local history</string>
+    <string name="settings_excluded_apps_label">Excluded Apps or Keywords (comma-separated)</string>
+    <string name="settings_excluded_apps_hint">e.g. bitwarden, 1password, otp, secret</string>
+    <string name="settings_excluded_save_btn">Save Rules</string>
+    <string name="settings_delete_cloud_title">Sync Deletions to Cloud</string>
+    <string name="settings_delete_cloud_subtitle">When permanently deleting a clip locally, remove its linked Telegram/Discord copy</string>
+    <string name="settings_open_storage_btn">Open Storage Capacity Manager</string>
 </resources>

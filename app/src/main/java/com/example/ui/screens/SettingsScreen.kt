@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -16,7 +20,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.ContentPasteGo
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
@@ -27,10 +33,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -59,9 +68,24 @@ fun SettingsScreen(
   onRetentionDaysChange: (Int) -> Unit,
   onClearSystemClipboard: () -> Unit,
   onWipeAllData: () -> Unit,
+  onInstantAutoSaveToggle: (Boolean) -> Unit = {},
+  onAutoDetectSensitiveToggle: (Boolean) -> Unit = {},
+  onBlockSensitiveSyncToggle: (Boolean) -> Unit = {},
+  onSkipAutoSaveSensitiveToggle: (Boolean) -> Unit = {},
+  onSaveExcludedAppsCsv: (String) -> Unit = {},
+  onDeleteCloudToggle: (Boolean) -> Unit = {},
+  onOpenStorageManager: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
+  val context = LocalContext.current
   var showWipeConfirm by remember { mutableStateOf(false) }
+  var excludedInput by remember { mutableStateOf(settings.excludedSourceAppsCsv) }
+
+  LaunchedEffect(settings.excludedSourceAppsCsv) {
+    if (excludedInput != settings.excludedSourceAppsCsv && excludedInput.isEmpty()) {
+      excludedInput = settings.excludedSourceAppsCsv
+    }
+  }
 
   Column(modifier = modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
     Column(
@@ -132,7 +156,85 @@ fun SettingsScreen(
         }
       }
 
-      // Group 2: Security & Privacy
+      // Group 2: Autonomous Capture & Optional Companion IME
+      VaultSectionCard {
+        SettingsGroupHeader(
+          icon = Icons.Filled.ContentPasteGo,
+          title = stringResource(R.string.settings_group_capture_ime),
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_autocapture_title),
+          subtitle = stringResource(R.string.settings_autocapture_subtitle),
+          checked = settings.autoCaptureOnForeground,
+          onCheckedChange = onAutoCaptureToggle,
+          testTag = "auto_capture_switch",
+        )
+
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_instant_autosave_title),
+          subtitle = stringResource(R.string.settings_instant_autosave_subtitle),
+          checked = settings.instantAutoSave,
+          onCheckedChange = onInstantAutoSaveToggle,
+          testTag = "instant_autosave_switch",
+        )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Icon(
+            imageVector = Icons.Filled.Keyboard,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.secondary,
+          )
+          Text(
+            text = stringResource(R.string.settings_ime_card_title),
+            style = MaterialTheme.typography.titleMedium,
+          )
+        }
+        Text(
+          text = stringResource(R.string.settings_ime_card_subtitle),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          OutlinedButton(
+            onClick = {
+              runCatching {
+                val intent =
+                  Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                  }
+                context.startActivity(intent)
+              }
+            },
+            modifier = Modifier.weight(1f).testTag("open_ime_settings_btn"),
+          ) {
+            Text(stringResource(R.string.settings_ime_open_btn))
+          }
+          OutlinedButton(
+            onClick = {
+              runCatching {
+                val imm =
+                  context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.showInputMethodPicker()
+              }
+            },
+            modifier = Modifier.weight(1f).testTag("open_ime_picker_btn"),
+          ) {
+            Text(stringResource(R.string.settings_ime_picker_btn))
+          }
+        }
+      }
+
+      // Group 3: Security, Sensitive Detection & Exclusions
       VaultSectionCard {
         SettingsGroupHeader(
           icon = Icons.Filled.Security,
@@ -140,51 +242,62 @@ fun SettingsScreen(
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_applock_title),
+          subtitle = stringResource(R.string.settings_applock_subtitle),
+          checked = settings.appLockEnabled,
+          onCheckedChange = onAppLockToggle,
+          testTag = "app_lock_switch",
+        )
+
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_detect_sensitive_title),
+          subtitle = stringResource(R.string.settings_detect_sensitive_subtitle),
+          checked = settings.autoDetectSensitivePatterns,
+          onCheckedChange = onAutoDetectSensitiveToggle,
+          testTag = "detect_sensitive_switch",
+        )
+
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_block_sensitive_sync_title),
+          subtitle = stringResource(R.string.settings_block_sensitive_sync_subtitle),
+          checked = settings.blockSensitiveCloudSync,
+          onCheckedChange = onBlockSensitiveSyncToggle,
+          testTag = "block_sensitive_sync_switch",
+        )
+
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_skip_sensitive_save_title),
+          subtitle = stringResource(R.string.settings_skip_sensitive_save_subtitle),
+          checked = settings.skipAutoSaveSensitive,
+          onCheckedChange = onSkipAutoSaveSensitiveToggle,
+          testTag = "skip_sensitive_save_switch",
+        )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        OutlinedTextField(
+          value = excludedInput,
+          onValueChange = { excludedInput = it },
+          label = { Text(stringResource(R.string.settings_excluded_apps_label)) },
+          placeholder = { Text(stringResource(R.string.settings_excluded_apps_hint)) },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth().testTag("excluded_apps_input"),
+        )
+        OutlinedButton(
+          onClick = { onSaveExcludedAppsCsv(excludedInput) },
+          modifier = Modifier.fillMaxWidth().testTag("save_exclusions_btn"),
         ) {
-          Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(
-              text = stringResource(R.string.settings_applock_title),
-              style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-              text = stringResource(R.string.settings_applock_subtitle),
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-          Switch(
-            checked = settings.appLockEnabled,
-            onCheckedChange = onAppLockToggle,
-            modifier = Modifier.testTag("app_lock_switch"),
-          )
+          Text(stringResource(R.string.settings_excluded_save_btn))
         }
 
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(
-              text = stringResource(R.string.settings_autocapture_title),
-              style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-              text = stringResource(R.string.settings_autocapture_subtitle),
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-          Switch(
-            checked = settings.autoCaptureOnForeground,
-            onCheckedChange = onAutoCaptureToggle,
-            modifier = Modifier.testTag("auto_capture_switch"),
-          )
-        }
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_delete_cloud_title),
+          subtitle = stringResource(R.string.settings_delete_cloud_subtitle),
+          checked = settings.deleteCloudOnLocalDelete,
+          onCheckedChange = onDeleteCloudToggle,
+          testTag = "delete_cloud_switch",
+        )
 
         OutlinedButton(
           onClick = onClearSystemClipboard,
@@ -196,13 +309,22 @@ fun SettingsScreen(
         }
       }
 
-      // Group 3: History Retention & Data Control
+      // Group 4: History Retention, Storage Capacity & Data Control
       VaultSectionCard {
         SettingsGroupHeader(
           icon = Icons.Filled.Storage,
           title = stringResource(R.string.settings_group_data),
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        OutlinedButton(
+          onClick = onOpenStorageManager,
+          modifier = Modifier.fillMaxWidth().testTag("settings_storage_btn"),
+        ) {
+          Icon(Icons.Filled.Storage, contentDescription = null)
+          Spacer(Modifier.width(8.dp))
+          Text(stringResource(R.string.settings_open_storage_btn))
+        }
 
         Text(
           text = stringResource(R.string.settings_retention_label),
@@ -277,6 +399,35 @@ fun SettingsScreen(
 }
 
 @Composable
+private fun SettingsToggleRow(
+  title: String,
+  subtitle: String,
+  checked: Boolean,
+  onCheckedChange: (Boolean) -> Unit,
+  testTag: String,
+) {
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+      Text(text = title, style = MaterialTheme.typography.titleMedium)
+      Text(
+        text = subtitle,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
+    Switch(
+      checked = checked,
+      onCheckedChange = onCheckedChange,
+      modifier = Modifier.testTag(testTag),
+    )
+  }
+}
+
+@Composable
 private fun SettingsGroupHeader(icon: ImageVector, title: String) {
   Row(
     verticalAlignment = Alignment.CenterVertically,
@@ -290,3 +441,4 @@ private fun SettingsGroupHeader(icon: ImageVector, title: String) {
     Text(text = title, style = MaterialTheme.typography.titleLarge)
   }
 }
+

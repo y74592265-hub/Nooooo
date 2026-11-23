@@ -16,6 +16,10 @@ import kotlinx.serialization.Serializable
 
 @Serializable object BackupSyncRoute
 
+@Serializable object CloudRecoveryRoute
+
+@Serializable object StorageCapacityRoute
+
 @Serializable object SettingsRoute
 
 @Serializable data class ClipDetailsRoute(val clipId: Long)

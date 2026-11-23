@@ -20,14 +20,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.AssistChip
@@ -39,7 +45,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +59,7 @@ import com.example.R
 import com.example.domain.model.Category
 import com.example.domain.model.ClipContentType
 import com.example.domain.model.ClipItem
+import com.example.domain.model.ClipSyncState
 import com.example.ui.theme.FavoriteGold
 import com.example.ui.theme.JetBrainsMonoFamily
 
@@ -228,68 +234,130 @@ fun ClipCard(
         Row(
           modifier = Modifier.fillMaxWidth(),
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.End,
+          horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-          IconButton(
-            onClick = onPinToggle,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("pin_button_${clip.id}"),
-          ) {
-            Icon(
-              imageVector = if (clip.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-              contentDescription =
-                stringResource(if (clip.isPinned) R.string.action_unpin else R.string.action_pin),
-              tint =
-                if (clip.isPinned) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.size(20.dp),
-            )
-          }
-          IconButton(
-            onClick = onFavoriteToggle,
-            modifier =
-              Modifier.minimumInteractiveComponentSize().testTag("favorite_button_${clip.id}"),
-          ) {
-            Icon(
-              imageVector = if (clip.isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
-              contentDescription =
-                stringResource(
-                  if (clip.isFavorite) R.string.action_unfavorite else R.string.action_favorite
-                ),
-              tint =
-                if (clip.isFavorite) FavoriteGold else MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.size(20.dp),
-            )
-          }
-          Spacer(modifier = Modifier.width(4.dp))
-          AssistChip(
-            onClick = onCopyClick,
-            modifier = Modifier.testTag("copy_button_${clip.id}"),
-            leadingIcon = {
+          SyncStateBadge(syncStatus = clip.syncStatus)
+
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+              onClick = onPinToggle,
+              modifier = Modifier.minimumInteractiveComponentSize().testTag("pin_button_${clip.id}"),
+            ) {
               Icon(
-                imageVector = Icons.Filled.ContentCopy,
-                contentDescription = stringResource(R.string.action_copy),
-                modifier = Modifier.size(16.dp),
+                imageVector = if (clip.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                contentDescription =
+                  stringResource(if (clip.isPinned) R.string.action_unpin else R.string.action_pin),
+                tint =
+                  if (clip.isPinned) MaterialTheme.colorScheme.primary
+                  else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
               )
-            },
-            label = {
-              Text(
-                text = stringResource(R.string.action_copy),
-                fontWeight = FontWeight.Medium,
+            }
+            IconButton(
+              onClick = onFavoriteToggle,
+              modifier =
+                Modifier.minimumInteractiveComponentSize().testTag("favorite_button_${clip.id}"),
+            ) {
+              Icon(
+                imageVector = if (clip.isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                contentDescription =
+                  stringResource(
+                    if (clip.isFavorite) R.string.action_unfavorite else R.string.action_favorite
+                  ),
+                tint =
+                  if (clip.isFavorite) FavoriteGold else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
               )
-            },
-            colors =
-              AssistChipDefaults.assistChipColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-              ),
-            border = null,
-          )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            AssistChip(
+              onClick = onCopyClick,
+              modifier = Modifier.testTag("copy_button_${clip.id}"),
+              leadingIcon = {
+                Icon(
+                  imageVector = Icons.Filled.ContentCopy,
+                  contentDescription = stringResource(R.string.action_copy),
+                  modifier = Modifier.size(16.dp),
+                )
+              },
+              label = {
+                Text(
+                  text = stringResource(R.string.action_copy),
+                  fontWeight = FontWeight.Medium,
+                )
+              },
+              colors =
+                AssistChipDefaults.assistChipColors(
+                  containerColor = MaterialTheme.colorScheme.primaryContainer,
+                  labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                  leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
+              border = null,
+            )
+          }
         }
       }
     }
   }
 }
+
+@Composable
+fun SyncStateBadge(syncStatus: ClipSyncState) {
+  val (icon, labelRes, bg, fg) =
+    when (syncStatus) {
+      ClipSyncState.LOCAL_ONLY ->
+        Tuple4(
+          Icons.Filled.PhoneAndroid,
+          R.string.sync_badge_local,
+          MaterialTheme.colorScheme.surfaceContainerHigh,
+          MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      ClipSyncState.PENDING ->
+        Tuple4(
+          Icons.Filled.Schedule,
+          R.string.sync_badge_pending,
+          MaterialTheme.colorScheme.secondaryContainer,
+          MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+      ClipSyncState.UPLOADING ->
+        Tuple4(
+          Icons.Filled.CloudUpload,
+          R.string.sync_badge_uploading,
+          MaterialTheme.colorScheme.primaryContainer,
+          MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+      ClipSyncState.SYNCED ->
+        Tuple4(
+          Icons.Filled.CloudDone,
+          R.string.sync_badge_synced,
+          MaterialTheme.colorScheme.tertiaryContainer,
+          MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+      ClipSyncState.FAILED ->
+        Tuple4(
+          Icons.Filled.ErrorOutline,
+          R.string.sync_badge_failed,
+          MaterialTheme.colorScheme.errorContainer,
+          MaterialTheme.colorScheme.onErrorContainer,
+        )
+      ClipSyncState.CONFLICT ->
+        Tuple4(
+          Icons.Filled.WarningAmber,
+          R.string.sync_badge_conflict,
+          MaterialTheme.colorScheme.errorContainer,
+          MaterialTheme.colorScheme.onErrorContainer,
+        )
+    }
+
+  StatusPill(
+    icon = icon,
+    label = stringResource(labelRes),
+    containerColor = bg,
+    contentColor = fg,
+  )
+}
+
+private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 
 @Composable
 fun ContentTypeBadge(contentType: ClipContentType) {

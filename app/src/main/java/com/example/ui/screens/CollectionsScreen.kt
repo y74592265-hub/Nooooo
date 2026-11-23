@@ -64,6 +64,7 @@ import com.example.domain.model.Category
 import com.example.domain.model.ClipItem
 import com.example.ui.components.ClipCard
 import com.example.ui.components.EmptyStateView
+import com.example.ui.components.ProvideSafeTextToolbar
 import com.example.ui.components.localizedCategoryName
 import com.example.ui.theme.AppSpacing
 
@@ -341,38 +342,40 @@ private fun CategoryEditorDialog(
     onDismissRequest = onDismiss,
     title = { Text(title) },
     text = {
-      Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedTextField(
-          value = name,
-          onValueChange = { name = it },
-          label = { Text(stringResource(R.string.collections_folder_name)) },
-          singleLine = true,
-          modifier = Modifier.fillMaxWidth().testTag("collection_name_input"),
-        )
-        Text(
-          text = stringResource(R.string.collections_folder_color),
-          style = MaterialTheme.typography.labelLarge,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        FlowRow(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-          FOLDER_COLORS.forEach { hex ->
-            Box(
-              modifier =
-                Modifier
-                  .size(34.dp)
-                  .clip(CircleShape)
-                  .background(Color(hex))
-                  .then(
-                    if (selectedColor == hex) {
-                      Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                    } else Modifier
-                  )
-                  .clickable { selectedColor = hex }
-            )
+      ProvideSafeTextToolbar {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text(stringResource(R.string.collections_folder_name)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().testTag("collection_name_input"),
+          )
+          Text(
+            text = stringResource(R.string.collections_folder_color),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+          ) {
+            FOLDER_COLORS.forEach { hex ->
+              Box(
+                modifier =
+                  Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color(hex))
+                    .then(
+                      if (selectedColor == hex) {
+                        Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                      } else Modifier
+                    )
+                    .clickable { selectedColor = hex }
+              )
+            }
           }
         }
       }

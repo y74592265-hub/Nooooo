@@ -266,4 +266,125 @@
     <string name="msg_restore_failed">فشلت الاستعادة: %1$s</string>
     <string name="msg_autosync_scheduled">تمت جدولة المزامنة التلقائية كل %1$d ساعات</string>
     <string name="msg_autosync_paused">تم إيقاف المزامنة التلقائية</string>
+    <string name="msg_queue_requeued">تمت إعادة جدولة عناصر المزامنة الفاشلة</string>
+    <string name="msg_sensitive_skipped">تم تجاهل النص الحساس حسب إعدادات الخصوصية</string>
+    <string name="msg_marked_sensitive_local">تم التشفير محليًا ومنع الرفع السحابي</string>
+    <string name="msg_exclusions_saved">تم حفظ قواعد الاستثناء</string>
+    <string name="msg_discord_bot_verified">تم التحقق من البوت @%1$s في %2$d خادم</string>
+    <string name="msg_discord_vault_created">قناة الخزنة الخاصة #%1$s جاهزة</string>
+
+    <!-- Companion IME -->
+    <string name="ime_service_name">مساعد الحافظة الذكية</string>
+    <string name="ime_bar_title">شريط الحافظة الذكية</string>
+    <string name="ime_bar_hint">اضغط على نص للصقه فورًا أو التقط حافظة النظام</string>
+    <string name="ime_bar_empty">لا توجد نصوص غير حساسة حديثة بعد</string>
+    <string name="ime_switch_keyboard">تبديل اللوحة</string>
+
+    <!-- Navigation Additions -->
+    <string name="nav_cloud_recovery">استرداد السحابة</string>
+    <string name="nav_storage_capacity">إدارة التخزين</string>
+
+    <!-- Clip Sync State Badges -->
+    <string name="sync_badge_local">محلي فقط</string>
+    <string name="sync_badge_pending">بانتظار المزامنة</string>
+    <string name="sync_badge_uploading">جاري الرفع</string>
+    <string name="sync_badge_synced">تمت المزامنة</string>
+    <string name="sync_badge_failed">فشلت المزامنة</string>
+    <string name="sync_badge_conflict">تعارض</string>
+
+    <!-- Home Instant Capture & Banners -->
+    <string name="home_auto_saved_title">تم الحفظ التلقائي في الخزنة</string>
+    <string name="home_auto_saved_sensitive">تم تشفير عنصر حساس محليًا (%1$s)</string>
+    <string name="home_action_undo">تراجع</string>
+    <string name="home_action_mark_sensitive">تحديد كحساس</string>
+    <string name="home_recovery_chip">الاسترداد</string>
+    <string name="home_storage_chip">التخزين</string>
+    <string name="clips_load_more">تحميل المزيد (%1$d متبقٍ)</string>
+    <string name="clips_showing_count">عرض %1$d من %2$d</string>
+
+    <!-- Discord Private Vault Setup -->
+    <string name="discord_vault_wizard_title">إعداد قناة الخزنة الخاصة على ديسكورد</string>
+    <string name="discord_vault_wizard_subtitle">يعمل عبر Discord Bot API الرسمي فقط (يُمنع استخدام User Token). يحجب @everyone ويمنح الوصول للبوت والمعرّفات المختارة فقط.</string>
+    <string name="discord_verify_bot_btn">التحقق من البوت وجلب الخوادم</string>
+    <string name="discord_pick_server_label">اختر خادم ديسكورد:</string>
+    <string name="discord_perm_ready">صلاحية إدارة القنوات متوفرة</string>
+    <string name="discord_perm_missing">صلاحية Manage Channels مفقودة</string>
+    <string name="discord_vault_channel_name_label">اسم القناة الخاصة</string>
+    <string name="discord_allowed_user_id_label">معرّف المستخدم المسموح له (اختياري)</string>
+    <string name="discord_allowed_role_id_label">معرّف الرتبة المسموح لها (اختياري)</string>
+    <string name="discord_create_vault_btn">إنشاء أو ربط الخزنة الخاصة</string>
+    <string name="discord_advanced_webhook_title">بديل Webhook أو معرّف قناة مباشر</string>
+
+    <!-- Google Drive Additions -->
+    <string name="drive_auto_incremental_toggle">تفضيل النسخ التزايدي (Deltas)</string>
+    <string name="drive_backup_delta_now">نسخ تزايدي الآن</string>
+
+    <!-- Sync Queue & Hub Links -->
+    <string name="sync_queue_summary_title">طابور المزامنة الدائم</string>
+    <string name="sync_queue_counts">قيد الانتظار: %1$d • قيد الرفع: %2$d • فشل: %3$d</string>
+    <string name="sync_queue_retry_btn">إعادة محاولة الفاشلة</string>
+    <string name="sync_open_recovery_btn">مركز الاسترداد السحابي</string>
+    <string name="sync_open_storage_btn">إدارة سعة التخزين</string>
+
+    <!-- Cloud Recovery Center -->
+    <string name="recovery_subtitle">افحص العناصر المحفوظة في تيليجرام وديسكورد وجوجل درايف وقارنها محليًا قبل الاستعادة دون تكرار.</string>
+    <string name="recovery_health_title">حالة المزودين</string>
+    <string name="recovery_scan_all_btn">فحص السحابة</string>
+    <string name="recovery_restore_selected_btn">استعادة المحدد (%1$d)</string>
+    <string name="recovery_restore_missing_btn">استعادة كل المفقود</string>
+    <string name="recovery_select_missing">تحديد المفقود فقط</string>
+    <string name="recovery_status_new">مفقود محليًا</string>
+    <string name="recovery_status_synced">متزامن مسبقًا</string>
+    <string name="recovery_status_local_newer">المحلي أحدث</string>
+    <string name="recovery_status_conflict">تعارض</string>
+    <string name="recovery_conflict_keep_local">إبقاء المحلي</string>
+    <string name="recovery_conflict_keep_both">إبقاء الاثنين</string>
+    <string name="recovery_conflict_overwrite">استخدام السحابي</string>
+    <string name="recovery_empty_title">جاهز لفحص النسخ السحابية</string>
+    <string name="recovery_empty_subtitle">اضغط «فحص السحابة» لعرض العناصر القابلة للاستعادة من تيليجرام وديسكورد وجوجل درايف.</string>
+    <string name="recovery_scan_complete">تم فحص %1$d عنصر من السحابة</string>
+    <string name="recovery_apply_summary">تمت استعادة %1$d عنصر وتخطي %2$d متزامن مسبقًا</string>
+
+    <!-- Storage Capacity Management -->
+    <string name="storage_subtitle">راقب حجم قاعدة البيانات وسلة المحذوفات والعناصر غير المتزامنة وأكبر النصوص.</string>
+    <string name="storage_used_format">%1$s مستخدم من حد %2$s (%3$d%%)</string>
+    <string name="storage_active_clips">النصوص النشطة: %1$d (%2$s)</string>
+    <string name="storage_trash_clips">سلة المحذوفات: %1$d (%2$s)</string>
+    <string name="storage_db_size">ملفات قاعدة البيانات: %1$s</string>
+    <string name="storage_device_free">المساحة الحرة بالجهاز: %1$s</string>
+    <string name="storage_unsynced_warning">يوجد %1$d عنصر لم تكتمل مزامنته سحابيًا بعد.</string>
+    <string name="storage_unsynced_protected">عنصر محمي: العناصر المحددة غير محفوظة سحابيًا بعد.</string>
+    <string name="storage_thresholds_title">عتبات تنبيه السعة</string>
+    <string name="storage_quota_label">الحد الافتراضي للتخزين</string>
+    <string name="storage_largest_clips_title">أكبر العناصر حجمًا</string>
+    <string name="storage_delete_selected_safe">حذف المحدد الآمن سحابيًا (%1$d)</string>
+    <string name="storage_delete_selected_force">حذف شامل غير المتزامن (%1$d)</string>
+    <string name="storage_include_unsynced_confirm_title">حذف عناصر غير متزامنة؟</string>
+    <string name="storage_include_unsynced_confirm_msg">بعض العناصر المحددة لم تُرفع إلى السحابة بعد. هل تريد نقلها إلى السلة رغم ذلك؟</string>
+    <string name="storage_banner_70">بلغت السعة %1$d%% — يُنصح بإجراء نسخ احتياطي أو مراجعة العناصر الكبيرة.</string>
+    <string name="storage_banner_85">بلغت السعة %1$d%% — أفرغ سلة المحذوفات أو احذف العناصر الكبيرة بعد المزامنة.</string>
+    <string name="storage_banner_95">مستوى حرج للسعة (%1$d%%) — حرر مساحة أو ارفع الحد التقديري.</string>
+    <string name="storage_action_backup">نسخ احتياطي الآن</string>
+    <string name="storage_action_manage">إدارة التخزين</string>
+
+    <!-- Settings Additions -->
+    <string name="settings_group_capture_ime">الالتقاط التلقائي ولوحة المفاتيح الاختيارية</string>
+    <string name="settings_instant_autosave_title">حفظ تلقائي فوري بدون تأكيد</string>
+    <string name="settings_instant_autosave_subtitle">حفظ النصوص المنسوخة فور فتح التطبيق دون نوافذ تأكيد</string>
+    <string name="settings_ime_card_title">لوحة مفاتيح مساعدة اختيارية (معطلة افتراضيًا)</string>
+    <string name="settings_ime_card_subtitle">فعّلها من إعدادات لوحة مفاتيح النظام فقط إذا أردت الالتقاط واللصق السريع أثناء الكتابة في التطبيقات الأخرى على أندرويد 10+.</string>
+    <string name="settings_ime_open_btn">تفعيل من إعدادات النظام</string>
+    <string name="settings_ime_picker_btn">اختيار لوحة المفاتيح</string>
+    <string name="settings_detect_sensitive_title">كشف كلمات المرور ورموز التحقق OTP</string>
+    <string name="settings_detect_sensitive_subtitle">تشفير رموز OTP ومفاتيح API وكلمات المرور تلقائيًا</string>
+    <string name="settings_block_sensitive_sync_title">منع الرفع السحابي للعناصر الحساسة</string>
+    <string name="settings_block_sensitive_sync_subtitle">إبقاء كلمات المرور ورموز OTP محلية فقط</string>
+    <string name="settings_skip_sensitive_save_title">تجاهل النصوص الحساسة نهائيًا</string>
+    <string name="settings_skip_sensitive_save_subtitle">عدم حفظ كلمات المرور أو رموز التحقق في السجل المحلي</string>
+    <string name="settings_excluded_apps_label">التطبيقات أو الكلمات المستثناة (مفصولة بفاصلة)</string>
+    <string name="settings_excluded_apps_hint">مثال: bitwarden, 1password, otp, secret</string>
+    <string name="settings_excluded_save_btn">حفظ القواعد</string>
+    <string name="settings_delete_cloud_title">مزامنة الحذف مع السحابة</string>
+    <string name="settings_delete_cloud_subtitle">عند الحذف النهائي محليًا يتم حذف النسخة المرتبطة في تيليجرام أو ديسكورد</string>
+    <string name="settings_open_storage_btn">فتح شاشة إدارة سعة التخزين</string>
 </resources>

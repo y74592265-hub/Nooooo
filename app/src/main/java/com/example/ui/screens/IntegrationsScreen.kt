@@ -5,6 +5,8 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,11 +24,13 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,7 +61,10 @@ import com.example.domain.model.DiscordConfig
 import com.example.domain.model.GoogleDriveConfig
 import com.example.domain.model.SyncProviderId
 import com.example.domain.model.TelegramConfig
+import com.example.integrations.discord.DiscordGuildSummary
 import com.example.integrations.gdrive.DriveFileDto
+import com.example.integrations.gdrive.GoogleDriveProvider
+import com.example.ui.components.ProvideSafeTextToolbar
 import com.example.ui.components.StatusPill
 import com.example.ui.components.VaultSectionCard
 import com.example.ui.components.localizedRelativeTime
@@ -70,6 +77,8 @@ fun IntegrationsScreen(
   viewModel: SyncIntegrationsViewModel,
   telegramConfig: TelegramConfig,
   discordConfig: DiscordConfig,
+  discordVerifiedBotName: String? = null,
+  discordGuilds: List<DiscordGuildSummary> = emptyList(),
   driveConfig: GoogleDriveConfig,
   driveFolders: List<DriveFileDto>,
   isBusy: Boolean,
@@ -109,8 +118,12 @@ fun IntegrationsScreen(
 
       DiscordIntegrationCard(
         config = discordConfig,
+        verifiedBotName = discordVerifiedBotName,
+        guilds = discordGuilds,
         isBusy = isBusy,
         onSave = viewModel::saveDiscordConfig,
+        onVerifyBotAndGuilds = viewModel::verifyDiscordBotAndFetchGuilds,
+        onCreatePrivateVault = viewModel::createDiscordPrivateVault,
         onTest = viewModel::testDiscordConnection,
         onSyncNow = { viewModel.syncProviderNow(SyncProviderId.DISCORD) },
       )
@@ -132,62 +145,64 @@ fun IntegrationsScreen(
   }
 
   if (showFolderPickerDialog) {
-    var newFolderName by remember { mutableStateOf("Smart Clipboard Backups") }
+    var newFolderName by remember { mutableStateOf(GoogleDriveProvider.DEFAULT_FOLDER_NAME) }
     AlertDialog(
       onDismissRequest = { showFolderPickerDialog = false },
       title = { Text(stringResource(R.string.drive_folder_dialog_title)) },
       text = {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-          OutlinedButton(
-            onClick = {
-              viewModel.saveDriveConfig(
-                driveConfig.copy(
-                  useAppDataFolder = true,
-                  selectedFolderId = null,
-                  selectedFolderName = "App Data Folder",
-                )
-              )
-              showFolderPickerDialog = false
-            },
-            modifier = Modifier.fillMaxWidth(),
-          ) {
-            Text(stringResource(R.string.drive_folder_appdata))
-          }
-          HorizontalDivider()
-          Text(
-            stringResource(R.string.drive_folder_or_pick),
-            style = MaterialTheme.typography.labelLarge,
-          )
-          driveFolders.forEach { folder ->
-            TextButton(
+        ProvideSafeTextToolbar {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
               onClick = {
                 viewModel.saveDriveConfig(
                   driveConfig.copy(
-                    useAppDataFolder = false,
-                    selectedFolderId = folder.id,
-                    selectedFolderName = folder.name,
+                    useAppDataFolder = true,
+                    selectedFolderId = null,
+                    selectedFolderName = "App Data Folder",
                   )
                 )
                 showFolderPickerDialog = false
               },
               modifier = Modifier.fillMaxWidth(),
             ) {
-              Text(folder.name)
+              Text(stringResource(R.string.drive_folder_appdata))
             }
-          }
-          OutlinedTextField(
-            value = newFolderName,
-            onValueChange = { newFolderName = it },
-            label = { Text(stringResource(R.string.drive_folder_new_name)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-          )
-          Button(
-            onClick = { viewModel.createDriveBackupFolder(newFolderName) },
-            enabled = newFolderName.isNotBlank() && !isBusy,
-            modifier = Modifier.fillMaxWidth(),
-          ) {
-            Text(stringResource(R.string.drive_folder_create_select))
+            HorizontalDivider()
+            Text(
+              stringResource(R.string.drive_folder_or_pick),
+              style = MaterialTheme.typography.labelLarge,
+            )
+            driveFolders.forEach { folder ->
+              TextButton(
+                onClick = {
+                  viewModel.saveDriveConfig(
+                    driveConfig.copy(
+                      useAppDataFolder = false,
+                      selectedFolderId = folder.id,
+                      selectedFolderName = folder.name,
+                    )
+                  )
+                  showFolderPickerDialog = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+              ) {
+                Text(folder.name)
+              }
+            }
+            OutlinedTextField(
+              value = newFolderName,
+              onValueChange = { newFolderName = it },
+              label = { Text(stringResource(R.string.drive_folder_new_name)) },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+              onClick = { viewModel.createDriveBackupFolder(newFolderName) },
+              enabled = newFolderName.isNotBlank() && !isBusy,
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Text(stringResource(R.string.drive_folder_create_select))
+            }
           }
         }
       },
@@ -376,11 +391,16 @@ private fun TelegramIntegrationCard(
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DiscordIntegrationCard(
   config: DiscordConfig,
+  verifiedBotName: String?,
+  guilds: List<DiscordGuildSummary>,
   isBusy: Boolean,
   onSave: (DiscordConfig) -> Unit,
+  onVerifyBotAndGuilds: (String) -> Unit,
+  onCreatePrivateVault: (String, String, String, String, String, String) -> Unit,
   onTest: () -> Unit,
   onSyncNow: () -> Unit,
 ) {
@@ -388,6 +408,11 @@ private fun DiscordIntegrationCard(
   var webhookUrl by remember(config.webhookUrl) { mutableStateOf(config.webhookUrl) }
   var botToken by remember(config.botToken) { mutableStateOf(config.botToken) }
   var channelId by remember(config.channelId) { mutableStateOf(config.channelId) }
+  var channelName by remember(config.channelName) { mutableStateOf(config.channelName) }
+  var selectedGuildId by remember(config.selectedGuildId) { mutableStateOf(config.selectedGuildId) }
+  var selectedGuildName by remember(config.selectedGuildName) { mutableStateOf(config.selectedGuildName) }
+  var allowedUserId by remember(config.allowedUserId) { mutableStateOf(config.allowedUserId) }
+  var allowedRoleId by remember(config.allowedRoleId) { mutableStateOf(config.allowedRoleId) }
   var autoSync by remember(config.autoSync) { mutableStateOf(config.autoSync) }
   var showSecrets by remember { mutableStateOf(false) }
 
@@ -422,6 +447,11 @@ private fun DiscordIntegrationCard(
               webhookUrl = webhookUrl,
               botToken = botToken,
               channelId = channelId,
+              channelName = channelName,
+              selectedGuildId = selectedGuildId,
+              selectedGuildName = selectedGuildName,
+              allowedUserId = allowedUserId,
+              allowedRoleId = allowedRoleId,
               autoSync = autoSync,
             )
           )
@@ -444,48 +474,143 @@ private fun DiscordIntegrationCard(
         else MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
+    // Private Vault Channel Setup Wizard
     Surface(
-      color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+      color = MaterialTheme.colorScheme.surfaceContainerLow,
       shape = MaterialTheme.shapes.small,
     ) {
-      Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.Top) {
-        Icon(Icons.Filled.Info, null, Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
+      Column(
+        modifier = Modifier.padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Filled.Lock, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+          Spacer(Modifier.width(6.dp))
+          Text(
+            text = stringResource(R.string.discord_vault_wizard_title),
+            style = MaterialTheme.typography.labelLarge,
+          )
+        }
         Text(
-          text = stringResource(R.string.discord_notice),
+          text = stringResource(R.string.discord_vault_wizard_subtitle),
           style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        OutlinedTextField(
+          value = botToken,
+          onValueChange = { botToken = it },
+          label = { Text(stringResource(R.string.discord_bot_token_label)) },
+          singleLine = true,
+          textStyle = LocalTextStyle.current.copy(fontFamily = JetBrainsMonoFamily, textDirection = TextDirection.Ltr),
+          visualTransformation =
+            if (showSecrets) VisualTransformation.None else PasswordVisualTransformation(),
+          trailingIcon = {
+            IconButton(onClick = { showSecrets = !showSecrets }) {
+              Icon(
+                if (showSecrets) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                contentDescription = stringResource(R.string.integration_toggle_visibility),
+              )
+            }
+          },
+          modifier = Modifier.fillMaxWidth().testTag("discord_bot_token_input"),
+        )
+
+        OutlinedButton(
+          onClick = { onVerifyBotAndGuilds(botToken) },
+          enabled = botToken.isNotBlank() && !isBusy,
+          modifier = Modifier.fillMaxWidth().testTag("discord_verify_bot_btn"),
+        ) {
+          Text(stringResource(R.string.discord_verify_bot_btn))
+        }
+
+        if (verifiedBotName != null) {
+          Text(
+            text = stringResource(R.string.msg_discord_bot_verified, verifiedBotName, guilds.size),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+          )
+        }
+
+        if (guilds.isNotEmpty()) {
+          Text(
+            text = stringResource(R.string.discord_pick_server_label),
+            style = MaterialTheme.typography.labelLarge,
+          )
+          FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            guilds.forEach { g ->
+              FilterChip(
+                selected = selectedGuildId == g.id,
+                onClick = {
+                  selectedGuildId = g.id
+                  selectedGuildName = g.name
+                },
+                label = {
+                  Text(
+                    "${g.name} • " +
+                      stringResource(
+                        if (g.canManageChannels) R.string.discord_perm_ready
+                        else R.string.discord_perm_missing
+                      )
+                  )
+                },
+                modifier = Modifier.testTag("discord_guild_chip_${g.id}"),
+              )
+            }
+          }
+        }
+
+        OutlinedTextField(
+          value = channelName,
+          onValueChange = { channelName = it },
+          label = { Text(stringResource(R.string.discord_vault_channel_name_label)) },
+          singleLine = true,
+          textStyle = LocalTextStyle.current.copy(fontFamily = JetBrainsMonoFamily, textDirection = TextDirection.Ltr),
+          modifier = Modifier.fillMaxWidth().testTag("discord_vault_channel_name_input"),
+        )
+        OutlinedTextField(
+          value = allowedUserId,
+          onValueChange = { allowedUserId = it },
+          label = { Text(stringResource(R.string.discord_allowed_user_id_label)) },
+          singleLine = true,
+          textStyle = LocalTextStyle.current.copy(fontFamily = JetBrainsMonoFamily, textDirection = TextDirection.Ltr),
+          modifier = Modifier.fillMaxWidth().testTag("discord_allowed_user_input"),
+        )
+        OutlinedTextField(
+          value = allowedRoleId,
+          onValueChange = { allowedRoleId = it },
+          label = { Text(stringResource(R.string.discord_allowed_role_id_label)) },
+          singleLine = true,
+          textStyle = LocalTextStyle.current.copy(fontFamily = JetBrainsMonoFamily, textDirection = TextDirection.Ltr),
+          modifier = Modifier.fillMaxWidth().testTag("discord_allowed_role_input"),
+        )
+
+        Button(
+          onClick = {
+            onCreatePrivateVault(
+              botToken.trim(),
+              selectedGuildId,
+              selectedGuildName,
+              channelName.trim(),
+              allowedUserId.trim(),
+              allowedRoleId.trim(),
+            )
+          },
+          enabled = botToken.isNotBlank() && selectedGuildId.isNotBlank() && !isBusy,
+          modifier = Modifier.fillMaxWidth().testTag("discord_create_vault_btn"),
+        ) {
+          Text(stringResource(R.string.discord_create_vault_btn))
+        }
       }
     }
 
-    OutlinedTextField(
-      value = webhookUrl,
-      onValueChange = { webhookUrl = it },
-      label = { Text(stringResource(R.string.discord_webhook_label)) },
-      singleLine = true,
-      textStyle = LocalTextStyle.current.copy(fontFamily = JetBrainsMonoFamily, textDirection = TextDirection.Ltr),
-      visualTransformation =
-        if (showSecrets) VisualTransformation.None else PasswordVisualTransformation(),
-      trailingIcon = {
-        IconButton(onClick = { showSecrets = !showSecrets }) {
-          Icon(
-            if (showSecrets) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-            contentDescription = stringResource(R.string.integration_toggle_visibility),
-          )
-        }
-      },
-      modifier = Modifier.fillMaxWidth().testTag("discord_webhook_input"),
-    )
-
-    OutlinedTextField(
-      value = botToken,
-      onValueChange = { botToken = it },
-      label = { Text(stringResource(R.string.discord_bot_token_label)) },
-      singleLine = true,
-      textStyle = LocalTextStyle.current.copy(fontFamily = JetBrainsMonoFamily, textDirection = TextDirection.Ltr),
-      visualTransformation =
-        if (showSecrets) VisualTransformation.None else PasswordVisualTransformation(),
-      modifier = Modifier.fillMaxWidth().testTag("discord_bot_token_input"),
+    Text(
+      text = stringResource(R.string.discord_advanced_webhook_title),
+      style = MaterialTheme.typography.labelLarge,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
     OutlinedTextField(
@@ -495,6 +620,17 @@ private fun DiscordIntegrationCard(
       singleLine = true,
       textStyle = LocalTextStyle.current.copy(fontFamily = JetBrainsMonoFamily, textDirection = TextDirection.Ltr),
       modifier = Modifier.fillMaxWidth().testTag("discord_channel_input"),
+    )
+
+    OutlinedTextField(
+      value = webhookUrl,
+      onValueChange = { webhookUrl = it },
+      label = { Text(stringResource(R.string.discord_webhook_label)) },
+      singleLine = true,
+      textStyle = LocalTextStyle.current.copy(fontFamily = JetBrainsMonoFamily, textDirection = TextDirection.Ltr),
+      visualTransformation =
+        if (showSecrets) VisualTransformation.None else PasswordVisualTransformation(),
+      modifier = Modifier.fillMaxWidth().testTag("discord_webhook_input"),
     )
 
     Row(
@@ -527,6 +663,11 @@ private fun DiscordIntegrationCard(
               webhookUrl = webhookUrl.trim(),
               botToken = botToken.trim(),
               channelId = channelId.trim(),
+              channelName = channelName.trim(),
+              selectedGuildId = selectedGuildId,
+              selectedGuildName = selectedGuildName,
+              allowedUserId = allowedUserId.trim(),
+              allowedRoleId = allowedRoleId.trim(),
               autoSync = autoSync,
             )
           )
@@ -545,6 +686,11 @@ private fun DiscordIntegrationCard(
               webhookUrl = webhookUrl.trim(),
               botToken = botToken.trim(),
               channelId = channelId.trim(),
+              channelName = channelName.trim(),
+              selectedGuildId = selectedGuildId,
+              selectedGuildName = selectedGuildName,
+              allowedUserId = allowedUserId.trim(),
+              allowedRoleId = allowedRoleId.trim(),
               autoSync = autoSync,
             )
           )
@@ -629,6 +775,23 @@ private fun GoogleDriveIntegrationCard(
       Switch(
         checked = config.encryptBackups,
         onCheckedChange = { onSaveConfig(config.copy(encryptBackups = it)) },
+      )
+    }
+
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Text(
+        text = stringResource(R.string.drive_auto_incremental_toggle),
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.weight(1f).padding(end = 12.dp),
+      )
+      Switch(
+        checked = config.autoIncrementalBackup,
+        onCheckedChange = { onSaveConfig(config.copy(autoIncrementalBackup = it)) },
+        modifier = Modifier.testTag("drive_incremental_switch"),
       )
     }
 

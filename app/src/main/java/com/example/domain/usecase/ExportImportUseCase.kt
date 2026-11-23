@@ -37,11 +37,21 @@ constructor(
   private val json: Json,
 ) {
 
-  suspend fun buildBackupPayload(): BackupPayload {
+  suspend fun buildBackupPayload(
+    modifiedSince: Long? = null,
+    isIncremental: Boolean = false,
+    baseBackupFileId: String? = null,
+  ): BackupPayload {
     categoryRepository.ensureDefaultCategories()
     val categories = categoryRepository.getAllCategoriesOnce()
     val categoryMap = categories.associateBy { it.id }
-    val clips = clipRepository.getAllActiveClipsOnce()
+    val allClips = clipRepository.getAllActiveClipsOnce()
+    val filteredClips =
+      if (isIncremental && modifiedSince != null && modifiedSince > 0L) {
+        allClips.filter { it.updatedAt > modifiedSince || it.createdAt > modifiedSince }
+      } else {
+        allClips
+      }
 
     val catDtos =
       categories.map {
@@ -53,7 +63,7 @@ constructor(
         )
       }
     val clipDtos =
-      clips.map { clip ->
+      filteredClips.map { clip ->
         val cat = categoryMap[clip.categoryId]
         BackupClipDto(
           title = clip.title,
@@ -72,15 +82,47 @@ constructor(
         )
       }
 
-    val rawPayload = BackupPayload(categories = catDtos, clips = clipDtos, sha256Checksum = "")
+    val rawPayload =
+      BackupPayload(
+        schemaVersion = 2,
+        isIncremental = isIncremental,
+        baseBackupFileId = baseBackupFileId,
+        categories = catDtos,
+        clips = clipDtos,
+        sha256Checksum = "",
+      )
     val checksum = computePayloadChecksum(rawPayload)
     return rawPayload.copy(sha256Checksum = checksum)
   }
 
   suspend fun exportAsJson(): String = json.encodeToString(buildBackupPayload())
 
-  suspend fun exportEncryptedBackup(passphrase: String): String {
-    val payloadJson = exportAsJson()
+  suspend fun exportIncrementalAsJson(
+    sinceTimestamp: Long,
+    baseBackupFileId: String? = null,
+  ): String =
+    json.encodeToString(
+      buildBackupPayload(
+        modifiedSince = sinceTimestamp,
+        isIncremental = true,
+        baseBackupFileId = baseBackupFileId,
+      )
+    )
+
+  suspend fun exportEncryptedBackup(
+    passphrase: String,
+    isIncremental: Boolean = false,
+    sinceTimestamp: Long? = null,
+    baseBackupFileId: String? = null,
+  ): String {
+    val payloadJson =
+      json.encodeToString(
+        buildBackupPayload(
+          modifiedSince = sinceTimestamp,
+          isIncremental = isIncremental,
+          baseBackupFileId = baseBackupFileId,
+        )
+      )
     val envelope = cryptoManager.encryptPortableBackup(payloadJson, passphrase)
     return json.encodeToString(envelope)
   }
@@ -119,7 +161,9 @@ constructor(
       val catName = categories[c.categoryId]?.name ?: "Personal"
       sb.appendLine()
       if (c.title.isNotBlank()) sb.appendLine("Title: ${c.title}")
-      sb.appendLine("Category: $catName | Type: ${c.contentType.name} | Date: ${dateFormat.format(Date(c.updatedAt))}")
+      sb.appendLine(
+        "Category: $catName | Type: ${c.contentType.name} | Date: ${dateFormat.format(Date(c.updatedAt))}"
+      )
       if (c.tags.isNotEmpty()) sb.appendLine("Tags: ${c.tags.joinToString(", ")}")
       sb.appendLine("---")
       sb.appendLine(c.content)
@@ -128,7 +172,7 @@ constructor(
     return sb.toString()
   }
 
-  suspend fun restoreFromRawContent(rawContent: String, passphrase: String? = null): RestoreSummary {
+  fun parseAndVerifyBackup(rawContent: String, passphrase: String? = null): Pair<BackupPayload, Boolean> {
     val trimmed = rawContent.trim()
     val payloadJson =
       if (trimmed.contains("SMART_CLIPBOARD_ENC_V1")) {
@@ -144,6 +188,11 @@ constructor(
     val checksumOk =
       payload.sha256Checksum.isBlank() || payload.sha256Checksum == expectedChecksum
     require(checksumOk) { "Backup integrity verification failed (SHA-256 mismatch)." }
+    return payload to (payload.sha256Checksum.isNotBlank())
+  }
+
+  suspend fun restoreFromRawContent(rawContent: String, passphrase: String? = null): RestoreSummary {
+    val (payload, checksumVerified) = parseAndVerifyBackup(rawContent, passphrase)
 
     categoryRepository.ensureDefaultCategories()
     val categoryIdByName = mutableMapOf<String, Long>()
@@ -181,7 +230,7 @@ constructor(
     return RestoreSummary(
       importedCount = imported,
       deduplicatedCount = deduplicated,
-      checksumVerified = payload.sha256Checksum.isNotBlank(),
+      checksumVerified = checksumVerified,
     )
   }
 

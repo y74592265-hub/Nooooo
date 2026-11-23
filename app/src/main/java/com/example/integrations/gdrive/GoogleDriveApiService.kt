@@ -6,13 +6,16 @@ import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Url
 
 @JsonClass(generateAdapter = true)
 data class DriveFileDto(
@@ -21,6 +24,7 @@ data class DriveFileDto(
   val mimeType: String? = null,
   val modifiedTime: String? = null,
   val size: String? = null,
+  val version: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -51,7 +55,7 @@ interface GoogleDriveApiService {
     @Header("Authorization") bearerToken: String,
     @Query("spaces") spaces: String = "appDataFolder",
     @Query("q") query: String? = null,
-    @Query("fields") fields: String = "files(id,name,mimeType,modifiedTime,size)",
+    @Query("fields") fields: String = "files(id,name,mimeType,modifiedTime,size,version)",
     @Query("orderBy") orderBy: String = "modifiedTime desc",
     @Query("pageSize") pageSize: Int = 25,
   ): Response<DriveFileListResponse>
@@ -70,9 +74,29 @@ interface GoogleDriveApiService {
     @Part file: MultipartBody.Part,
   ): Response<DriveFileDto>
 
+  @POST("upload/drive/v3/files?uploadType=resumable")
+  suspend fun startResumableUpload(
+    @Header("Authorization") bearerToken: String,
+    @Header("X-Upload-Content-Type") contentType: String = "application/json",
+    @Header("X-Upload-Content-Length") contentLength: Long,
+    @Body metadata: RequestBody,
+  ): Response<Unit>
+
+  @PUT
+  suspend fun uploadResumableContent(
+    @Url uploadSessionUrl: String,
+    @Body content: RequestBody,
+  ): Response<DriveFileDto>
+
   @GET("drive/v3/files/{fileId}?alt=media")
   suspend fun downloadFileContent(
     @Header("Authorization") bearerToken: String,
     @Path("fileId") fileId: String,
   ): Response<ResponseBody>
+
+  @DELETE("drive/v3/files/{fileId}")
+  suspend fun deleteFile(
+    @Header("Authorization") bearerToken: String,
+    @Path("fileId") fileId: String,
+  ): Response<Unit>
 }

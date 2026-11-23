@@ -3,8 +3,10 @@ package com.example
 import android.content.Context
 import android.content.res.Configuration
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -22,10 +24,12 @@ import com.example.domain.model.CategoryDefaults
 import com.example.domain.model.ClipContentType
 import com.example.domain.model.ClipItem
 import com.example.domain.usecase.SearchFilter
+import com.example.ui.components.PlatformSafeTextToolbar
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.SmartClipboardTheme
+import com.example.ui.viewmodel.AutoCapturedBannerState
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -57,9 +61,9 @@ class SmartClipboardUiTest {
   }
 
   @Test
-  fun `home screen displays detected clipboard banner and triggers copy action`() {
+  fun `home screen displays auto captured banner with undo and triggers copy action`() {
     var copiedClip: ClipItem? = null
-    var savedDetected = false
+    var undone = false
     val clip =
       ClipItem(
         id = 1L,
@@ -69,16 +73,25 @@ class SmartClipboardUiTest {
         contentType = ClipContentType.CODE,
         categoryId = CategoryDefaults.PROGRAMMING_ID,
       )
+    val banner =
+      AutoCapturedBannerState(
+        clip = clip.copy(id = 99L, content = "https://developer.android.com"),
+        autoMarkedSensitive = false,
+        sensitiveReason = null,
+        queuedProviders = emptyList(),
+      )
 
     composeTestRule.setContent {
       SmartClipboardTheme {
         HomeScreen(
           clips = listOf(clip),
+          totalActiveCount = 1,
           categories = sampleCategories,
-          detectedClipboardText = "https://developer.android.com",
+          autoCapturedBanner = banner,
           onCaptureClipboardNow = {},
-          onSaveDetectedClipboard = { savedDetected = true },
-          onDismissDetectedClipboard = {},
+          onUndoAutoCaptured = { undone = true },
+          onMarkBannerSensitive = {},
+          onDismissAutoCapturedBanner = {},
           onAddNewClip = {},
           onOpenClipDetails = {},
           onCopyClip = { copiedClip = it },
@@ -94,9 +107,9 @@ class SmartClipboardUiTest {
     }
 
     composeTestRule.waitForIdle()
-    composeTestRule.onNodeWithTag("detected_clipboard_card").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("save_detected_button").performClick()
-    assertTrue(savedDetected)
+    composeTestRule.onNodeWithTag("auto_captured_banner").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("undo_auto_captured_btn").performClick()
+    assertTrue(undone)
 
     composeTestRule.onNodeWithTag("copy_button_1").performScrollTo().performClick()
     composeTestRule.waitForIdle()
@@ -183,10 +196,11 @@ class SmartClipboardUiTest {
           HomeScreen(
             clips = listOf(clip),
             categories = listOf(Category(CategoryDefaults.WORK_ID, "Work", 0xFF8B5CF6, isDefault = true)),
-            detectedClipboardText = null,
+            autoCapturedBanner = null,
             onCaptureClipboardNow = {},
-            onSaveDetectedClipboard = {},
-            onDismissDetectedClipboard = {},
+            onUndoAutoCaptured = {},
+            onMarkBannerSensitive = {},
+            onDismissAutoCapturedBanner = {},
             onAddNewClip = {},
             onOpenClipDetails = {},
             onCopyClip = {},
@@ -206,5 +220,72 @@ class SmartClipboardUiTest {
     composeTestRule.onNodeWithText("أحدث النصوص").assertIsDisplayed()
     composeTestRule.onNodeWithText("العمل").assertIsDisplayed()
     composeTestRule.onNodeWithText("مرحبا بكم في الحافظة الذكية").assertIsDisplayed()
+  }
+
+  @Test
+  fun `safe text toolbar ignores detached views and never double finishes floating action mode`() {
+    val ctx = ApplicationProvider.getApplicationContext<Context>()
+    var finishCount = 0
+    var activeCallback: android.view.ActionMode.Callback2? = null
+
+    val fakeMode =
+      object : android.view.ActionMode() {
+        override fun setTitle(title: CharSequence?) = Unit
+        override fun setTitle(resId: Int) = Unit
+        override fun setSubtitle(subtitle: CharSequence?) = Unit
+        override fun setSubtitle(resId: Int) = Unit
+        override fun setCustomView(view: android.view.View?) = Unit
+        override fun invalidate() = Unit
+        override fun finish() {
+          finishCount++
+          activeCallback?.onDestroyActionMode(this)
+        }
+        override fun getMenu(): android.view.Menu? = null
+        override fun getTitle(): CharSequence? = null
+        override fun getSubtitle(): CharSequence? = null
+        override fun getCustomView(): android.view.View? = null
+        override fun getMenuInflater(): android.view.MenuInflater? = null
+      }
+
+    // Detached view should safely skip startActionMode without crashing or leaking
+    val detachedView = android.view.View(ctx)
+    val detachedToolbar = PlatformSafeTextToolbar(detachedView)
+    detachedToolbar.showMenu(Rect(0f, 0f, 10f, 10f), onCopyRequested = {}, null, null, null)
+    assertEquals(TextToolbarStatus.Hidden, detachedToolbar.status)
+
+    // Attached view with re-entrant hide() inside onCopyRequested finishes ActionMode only ONCE
+    val attachedView =
+      object : android.view.View(ctx) {
+        override fun isAttachedToWindow(): Boolean = true
+        override fun getWindowToken(): android.os.IBinder = android.os.Binder()
+        override fun startActionMode(callback: android.view.ActionMode.Callback?, type: Int): android.view.ActionMode {
+          activeCallback = callback as android.view.ActionMode.Callback2
+          return fakeMode
+        }
+      }
+
+    val toolbar = PlatformSafeTextToolbar(attachedView)
+    var copied = false
+    toolbar.showMenu(
+      rect = Rect(0f, 0f, 100f, 40f),
+      onCopyRequested = {
+        copied = true
+        toolbar.hide()
+      },
+      onPasteRequested = null,
+      onCutRequested = null,
+      onSelectAllRequested = null,
+    )
+    assertEquals(TextToolbarStatus.Shown, toolbar.status)
+
+    val dummyMenu = android.widget.PopupMenu(ctx, attachedView).menu
+    activeCallback?.onCreateActionMode(fakeMode, dummyMenu)
+    val copyItem = dummyMenu.getItem(0)
+    activeCallback?.onActionItemClicked(fakeMode, copyItem)
+    toolbar.hide()
+
+    assertTrue(copied)
+    assertEquals(1, finishCount)
+    assertEquals(TextToolbarStatus.Hidden, toolbar.status)
   }
 }

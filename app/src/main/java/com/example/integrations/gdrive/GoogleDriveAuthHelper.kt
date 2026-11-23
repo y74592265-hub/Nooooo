@@ -25,7 +25,7 @@ sealed interface DriveAuthState {
 }
 
 @Singleton
-class GoogleDriveAuthHelper @Inject constructor(@ApplicationContext private val context: Context) {
+open class GoogleDriveAuthHelper @Inject constructor(@ApplicationContext private val context: Context) {
 
   companion object {
     const val SCOPE_DRIVE_APPDATA = "https://www.googleapis.com/auth/drive.appdata"
@@ -36,13 +36,13 @@ class GoogleDriveAuthHelper @Inject constructor(@ApplicationContext private val 
 
   @Volatile private var cachedToken: String? = null
 
-  fun getCachedAccessToken(): String? = cachedToken
+  open fun getCachedAccessToken(): String? = cachedToken
 
-  fun clearCachedToken() {
+  open fun clearCachedToken() {
     cachedToken = null
   }
 
-  suspend fun requestAuthorization(includeVisibleFolderScope: Boolean): DriveAuthState {
+  open suspend fun requestAuthorization(includeVisibleFolderScope: Boolean): DriveAuthState {
     val availability =
       try {
         GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)

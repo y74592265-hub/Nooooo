@@ -31,6 +31,33 @@ enum class SyncDirection {
   RESTORE,
 }
 
+enum class SyncQueueOperation {
+  PUSH,
+  DELETE_REMOTE,
+}
+
+enum class SyncQueueStatus {
+  PENDING,
+  UPLOADING,
+  SYNCED,
+  FAILED,
+  CONFLICT,
+}
+
+data class SyncQueueItem(
+  val id: Long = 0L,
+  val clipId: Long,
+  val provider: SyncProviderId,
+  val operation: SyncQueueOperation = SyncQueueOperation.PUSH,
+  val remoteTargetId: String? = null,
+  val status: SyncQueueStatus = SyncQueueStatus.PENDING,
+  val retryCount: Int = 0,
+  val nextRetryAt: Long = 0L,
+  val lastError: String? = null,
+  val createdAt: Long = System.currentTimeMillis(),
+  val updatedAt: Long = System.currentTimeMillis(),
+)
+
 data class SyncLog(
   val id: Long = 0L,
   val provider: SyncProviderId,

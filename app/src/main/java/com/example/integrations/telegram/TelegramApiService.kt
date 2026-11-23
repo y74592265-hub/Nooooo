@@ -10,11 +10,17 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 @JsonClass(generateAdapter = true)
+data class TelegramResponseParameters(
+  @Json(name = "retry_after") val retryAfter: Long? = null,
+)
+
+@JsonClass(generateAdapter = true)
 data class TelegramResponse<T>(
   val ok: Boolean,
   val result: T? = null,
   @Json(name = "error_code") val errorCode: Int? = null,
   val description: String? = null,
+  val parameters: TelegramResponseParameters? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -54,6 +60,12 @@ data class TelegramSendMessageRequest(
   @Json(name = "disable_web_page_preview") val disableWebPagePreview: Boolean = true,
 )
 
+@JsonClass(generateAdapter = true)
+data class TelegramDeleteMessageRequest(
+  @Json(name = "chat_id") val chatId: String,
+  @Json(name = "message_id") val messageId: Long,
+)
+
 interface TelegramApiService {
   @GET("/bot{token}/getMe")
   suspend fun getMe(@Path("token") token: String): Response<TelegramResponse<TelegramUser>>
@@ -71,4 +83,10 @@ interface TelegramApiService {
     @Query("limit") limit: Int = 50,
     @Query("timeout") timeout: Int = 0,
   ): Response<TelegramResponse<List<TelegramUpdate>>>
+
+  @POST("/bot{token}/deleteMessage")
+  suspend fun deleteMessage(
+    @Path("token") token: String,
+    @Body body: TelegramDeleteMessageRequest,
+  ): Response<TelegramResponse<Boolean>>
 }

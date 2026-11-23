@@ -13,6 +13,7 @@ import com.example.data.local.SmartClipboardDatabase
 import com.example.data.repository.CategoryRepositoryImpl
 import com.example.data.repository.ClipRepositoryImpl
 import com.example.data.repository.SyncLogRepositoryImpl
+import com.example.data.repository.SyncQueueRepositoryImpl
 import com.example.domain.model.ClipSource
 import com.example.domain.model.DiscordConfig
 import com.example.domain.model.GoogleDriveConfig
@@ -23,10 +24,14 @@ import com.example.domain.usecase.ExportImportUseCase
 import com.example.integrations.ProviderResult
 import com.example.integrations.discord.DiscordApiService
 import com.example.integrations.discord.DiscordAuthor
+import com.example.integrations.discord.DiscordBotUser
 import com.example.integrations.discord.DiscordChannel
+import com.example.integrations.discord.DiscordCreateChannelRequest
+import com.example.integrations.discord.DiscordGuild
 import com.example.integrations.discord.DiscordMessageDto
 import com.example.integrations.discord.DiscordMessageRequest
 import com.example.integrations.discord.DiscordProvider
+import com.example.integrations.discord.DiscordRole
 import com.example.integrations.discord.DiscordWebhookPayload
 import com.example.integrations.gdrive.DriveCreateFolderRequest
 import com.example.integrations.gdrive.DriveFileDto
@@ -37,6 +42,7 @@ import com.example.integrations.gdrive.GoogleDriveProvider
 import com.example.integrations.gdrive.GoogleUserInfoResponse
 import com.example.integrations.telegram.TelegramApiService
 import com.example.integrations.telegram.TelegramChat
+import com.example.integrations.telegram.TelegramDeleteMessageRequest
 import com.example.integrations.telegram.TelegramMessage
 import com.example.integrations.telegram.TelegramProvider
 import com.example.integrations.telegram.TelegramResponse
@@ -74,6 +80,7 @@ class SyncEngineAndProvidersTest {
   private lateinit var clipRepo: ClipRepositoryImpl
   private lateinit var categoryRepo: CategoryRepositoryImpl
   private lateinit var syncLogRepo: SyncLogRepositoryImpl
+  private lateinit var syncQueueRepo: SyncQueueRepositoryImpl
   private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
   @Before
@@ -88,6 +95,7 @@ class SyncEngineAndProvidersTest {
     clipRepo = ClipRepositoryImpl(db.clipDao(), crypto, SystemClipboardHelper(context))
     categoryRepo = CategoryRepositoryImpl(db.categoryDao())
     syncLogRepo = SyncLogRepositoryImpl(db.syncLogDao())
+    syncQueueRepo = SyncQueueRepositoryImpl(db.syncQueueDao())
     categoryRepo.ensureDefaultCategories()
     setNetworkOnline(true)
   }
@@ -130,6 +138,9 @@ class SyncEngineAndProvidersTest {
 
         override suspend fun getUpdates(token: String, offset: Long?, limit: Int, timeout: Int) =
           Response.error<TelegramResponse<List<TelegramUpdate>>>(401, "Unauthorized".toResponseBody())
+
+        override suspend fun deleteMessage(token: String, body: TelegramDeleteMessageRequest) =
+          Response.error<TelegramResponse<Boolean>>(401, "Unauthorized".toResponseBody())
       }
 
     prefs.saveTelegramConfig(TelegramConfig(enabled = true, botToken = "bad_token", chatId = "12345"))
@@ -138,7 +149,7 @@ class SyncEngineAndProvidersTest {
     assertTrue(testRes is ProviderResult.Error)
 
     val engine =
-      SyncEngine(context, setOf(tgProvider), clipRepo, categoryRepo, syncLogRepo, prefs)
+      SyncEngine(context, setOf(tgProvider), clipRepo, categoryRepo, syncLogRepo, syncQueueRepo, prefs)
     engine.syncAll()
 
     // Local clip remains untouched despite Telegram failure, and error is logged
@@ -170,9 +181,13 @@ class SyncEngineAndProvidersTest {
                 ),
             )
           )
+
+        override suspend fun deleteMessage(token: String, body: TelegramDeleteMessageRequest) =
+          Response.success(TelegramResponse(ok = true, result = true))
       }
     val workingTg = TelegramProvider(okTelegramApi, prefs, categoryRepo)
-    val engine2 = SyncEngine(context, setOf(workingTg), clipRepo, categoryRepo, syncLogRepo, prefs)
+    val engine2 =
+      SyncEngine(context, setOf(workingTg), clipRepo, categoryRepo, syncLogRepo, syncQueueRepo, prefs)
     engine2.syncAll()
     engine2.syncAll() // Second sync must not duplicate the pulled message
 
@@ -199,6 +214,24 @@ class SyncEngineAndProvidersTest {
         override suspend fun getWebhookInfo(webhookUrl: String) =
           Response.error<DiscordChannel>(404, "Unknown".toResponseBody())
 
+        override suspend fun getCurrentBotUser(botAuthorization: String) =
+          Response.error<DiscordBotUser>(401, "Unauthorized".toResponseBody())
+
+        override suspend fun getBotGuilds(botAuthorization: String) =
+          Response.success(emptyList<DiscordGuild>())
+
+        override suspend fun getGuildChannels(botAuthorization: String, guildId: String) =
+          Response.success(emptyList<DiscordChannel>())
+
+        override suspend fun getGuildRoles(botAuthorization: String, guildId: String) =
+          Response.success(emptyList<DiscordRole>())
+
+        override suspend fun createGuildChannel(
+          botAuthorization: String,
+          guildId: String,
+          body: DiscordCreateChannelRequest,
+        ) = Response.error<DiscordChannel>(401, "Unauthorized".toResponseBody())
+
         override suspend fun getChannel(botAuthorization: String, channelId: String) =
           Response.error<DiscordChannel>(401, "Unauthorized".toResponseBody())
 
@@ -213,7 +246,14 @@ class SyncEngineAndProvidersTest {
           channelId: String,
           afterMessageId: String?,
           limit: Int,
+          beforeMessageId: String?,
         ) = Response.success(emptyList<DiscordMessageDto>())
+
+        override suspend fun deleteChannelMessage(
+          botAuthorization: String,
+          channelId: String,
+          messageId: String,
+        ) = Response.error<Unit>(401, "Unauthorized".toResponseBody())
       }
 
     val discordProvider = DiscordProvider(failingWebhookDiscord, prefs, categoryRepo)
@@ -245,6 +285,24 @@ class SyncEngineAndProvidersTest {
         override suspend fun getWebhookInfo(webhookUrl: String) =
           Response.success(DiscordChannel("999", "clips"))
 
+        override suspend fun getCurrentBotUser(botAuthorization: String) =
+          Response.success(DiscordBotUser("b1", "SmartBot", bot = true))
+
+        override suspend fun getBotGuilds(botAuthorization: String) =
+          Response.success(emptyList<DiscordGuild>())
+
+        override suspend fun getGuildChannels(botAuthorization: String, guildId: String) =
+          Response.success(emptyList<DiscordChannel>())
+
+        override suspend fun getGuildRoles(botAuthorization: String, guildId: String) =
+          Response.success(emptyList<DiscordRole>())
+
+        override suspend fun createGuildChannel(
+          botAuthorization: String,
+          guildId: String,
+          body: DiscordCreateChannelRequest,
+        ) = Response.success(DiscordChannel("999", body.name))
+
         override suspend fun getChannel(botAuthorization: String, channelId: String) =
           Response.success(DiscordChannel("999", "clips"))
 
@@ -259,6 +317,7 @@ class SyncEngineAndProvidersTest {
           channelId: String,
           afterMessageId: String?,
           limit: Int,
+          beforeMessageId: String?,
         ) =
           Response.success(
             listOf(
@@ -266,6 +325,12 @@ class SyncEngineAndProvidersTest {
               DiscordMessageDto("202", "Bot echo ignored", DiscordAuthor("b1", "bot", bot = true)),
             )
           )
+
+        override suspend fun deleteChannelMessage(
+          botAuthorization: String,
+          channelId: String,
+          messageId: String,
+        ) = Response.success(Unit)
       }
     val workingDiscord = DiscordProvider(okDiscordApi, prefs, categoryRepo)
     val pulled = workingDiscord.pullClips() as ProviderResult.Success
@@ -300,8 +365,23 @@ class SyncEngineAndProvidersTest {
           file: MultipartBody.Part,
         ) = Response.error<DriveFileDto>(500, "Err".toResponseBody())
 
+        override suspend fun startResumableUpload(
+          bearerToken: String,
+          contentType: String,
+          contentLength: Long,
+          metadata: RequestBody,
+        ) = Response.error<Unit>(500, "Err".toResponseBody())
+
+        override suspend fun uploadResumableContent(
+          uploadSessionUrl: String,
+          content: RequestBody,
+        ) = Response.error<DriveFileDto>(500, "Err".toResponseBody())
+
         override suspend fun downloadFileContent(bearerToken: String, fileId: String) =
           Response.error<okhttp3.ResponseBody>(404, "Not found".toResponseBody())
+
+        override suspend fun deleteFile(bearerToken: String, fileId: String) =
+          Response.error<Unit>(404, "Not found".toResponseBody())
       }
 
     prefs.saveGoogleDriveConfig(GoogleDriveConfig(enabled = true, accountEmail = "user@example.com"))
@@ -315,7 +395,8 @@ class SyncEngineAndProvidersTest {
 
     // Simulate offline state on SyncEngine
     setNetworkOnline(false)
-    val engine = SyncEngine(context, setOf(driveProvider), clipRepo, categoryRepo, syncLogRepo, prefs)
+    val engine =
+      SyncEngine(context, setOf(driveProvider), clipRepo, categoryRepo, syncLogRepo, syncQueueRepo, prefs)
     val offlineResult = engine.syncAll()
     assertFalse(offlineResult)
     assertEquals(SyncStatus.ERROR, engine.state.value.lastOverallStatus)

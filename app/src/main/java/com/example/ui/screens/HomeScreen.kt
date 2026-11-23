@@ -24,18 +24,21 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -55,21 +58,28 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.domain.model.Category
 import com.example.domain.model.ClipItem
+import com.example.domain.model.StorageCapacityStats
+import com.example.domain.model.StorageThresholdLevel
 import com.example.ui.components.ClipCard
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.SectionHeader
+import com.example.ui.components.StorageCapacityBanner
 import com.example.ui.components.localizedCategoryName
 import com.example.ui.theme.AppSpacing
 import com.example.ui.theme.FavoriteGold
+import com.example.ui.viewmodel.AutoCapturedBannerState
 
 @Composable
 fun HomeScreen(
   clips: List<ClipItem>,
+  totalActiveCount: Int = clips.size,
   categories: List<Category>,
-  detectedClipboardText: String?,
+  autoCapturedBanner: AutoCapturedBannerState?,
+  storageStats: StorageCapacityStats? = null,
   onCaptureClipboardNow: () -> Unit,
-  onSaveDetectedClipboard: () -> Unit,
-  onDismissDetectedClipboard: () -> Unit,
+  onUndoAutoCaptured: () -> Unit,
+  onMarkBannerSensitive: () -> Unit,
+  onDismissAutoCapturedBanner: () -> Unit,
   onAddNewClip: () -> Unit,
   onOpenClipDetails: (Long) -> Unit,
   onCopyClip: (ClipItem) -> Unit,
@@ -77,6 +87,8 @@ fun HomeScreen(
   onToggleFavorite: (ClipItem) -> Unit,
   onOpenFavorites: () -> Unit,
   onOpenIntegrations: () -> Unit,
+  onOpenRecovery: () -> Unit = {},
+  onOpenStorage: () -> Unit = {},
   onOpenTrash: () -> Unit,
   onOpenSettings: () -> Unit,
   onOpenBackupSync: () -> Unit,
@@ -102,7 +114,7 @@ fun HomeScreen(
           VaultStatTile(
             icon = Icons.Filled.Inventory2,
             label = stringResource(R.string.home_stat_total),
-            value = "${clips.size}",
+            value = "$totalActiveCount",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f),
           )
@@ -142,6 +154,18 @@ fun HomeScreen(
               ),
           )
           AssistChip(
+            onClick = onOpenRecovery,
+            modifier = Modifier.testTag("home_recovery_chip"),
+            leadingIcon = { Icon(Icons.Filled.CloudDownload, null, Modifier.size(18.dp)) },
+            label = { Text(stringResource(R.string.home_recovery_chip)) },
+          )
+          AssistChip(
+            onClick = onOpenStorage,
+            modifier = Modifier.testTag("home_storage_chip"),
+            leadingIcon = { Icon(Icons.Filled.Storage, null, Modifier.size(18.dp)) },
+            label = { Text(stringResource(R.string.home_storage_chip)) },
+          )
+          AssistChip(
             onClick = onOpenFavorites,
             modifier = Modifier.testTag("home_favorites_chip"),
             leadingIcon = { Icon(Icons.Filled.Star, null, Modifier.size(18.dp)) },
@@ -174,55 +198,99 @@ fun HomeScreen(
         }
       }
 
-      // Foreground Detected Clipboard Banner
+      // Non-intrusive Storage Threshold Warning Banner
+      if (storageStats != null && storageStats.thresholdLevel != StorageThresholdLevel.NORMAL) {
+        item {
+          StorageCapacityBanner(
+            stats = storageStats,
+            onBackupNow = onOpenBackupSync,
+            onManageStorage = onOpenStorage,
+            modifier = Modifier.testTag("home_storage_banner"),
+          )
+        }
+      }
+
+      // Non-Blocking Instant Auto-Captured Status Indicator (replaces manual confirmation dialog)
       item {
         AnimatedVisibility(
-          visible = !detectedClipboardText.isNullOrBlank(),
+          visible = autoCapturedBanner != null,
           enter = fadeIn() + expandVertically(),
           exit = fadeOut() + shrinkVertically(),
         ) {
+          val banner = autoCapturedBanner ?: return@AnimatedVisibility
           Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
+            color =
+              if (banner.autoMarkedSensitive) MaterialTheme.colorScheme.tertiaryContainer
+              else MaterialTheme.colorScheme.primaryContainer,
             shape = MaterialTheme.shapes.medium,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-            modifier = Modifier.fillMaxWidth().testTag("detected_clipboard_card"),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+            modifier = Modifier.fillMaxWidth().testTag("auto_captured_banner"),
           ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                  imageVector = Icons.Filled.ContentPaste,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                  modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.padding(14.dp)) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+              ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                  Icon(
+                    imageVector =
+                      if (banner.autoMarkedSensitive) Icons.Filled.Lock else Icons.Filled.Done,
+                    contentDescription = null,
+                    tint =
+                      if (banner.autoMarkedSensitive) MaterialTheme.colorScheme.onTertiaryContainer
+                      else MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(18.dp),
+                  )
+                  Spacer(Modifier.width(8.dp))
+                  Text(
+                    text =
+                      if (banner.autoMarkedSensitive) {
+                        stringResource(
+                          R.string.home_auto_saved_sensitive,
+                          banner.sensitiveReason ?: "Protected",
+                        )
+                      } else {
+                        stringResource(R.string.home_auto_saved_title)
+                      },
+                    style = MaterialTheme.typography.labelLarge,
+                    color =
+                      if (banner.autoMarkedSensitive) MaterialTheme.colorScheme.onTertiaryContainer
+                      else MaterialTheme.colorScheme.onPrimaryContainer,
+                  )
+                }
+                TextButton(
+                  onClick = onDismissAutoCapturedBanner,
+                  modifier = Modifier.testTag("dismiss_auto_captured_btn"),
+                ) {
+                  Text(stringResource(R.string.action_close))
+                }
+              }
+              if (!banner.autoMarkedSensitive) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                  text = stringResource(R.string.home_clipboard_detected),
-                  style = MaterialTheme.typography.labelLarge,
-                  color = MaterialTheme.colorScheme.onPrimaryContainer,
+                  text = banner.clip.content,
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f),
+                  maxLines = 2,
+                  overflow = TextOverflow.Ellipsis,
                 )
               }
               Spacer(modifier = Modifier.height(8.dp))
-              Text(
-                text = detectedClipboardText.orEmpty(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f),
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-              )
-              Spacer(modifier = Modifier.height(12.dp))
               Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                  onClick = onSaveDetectedClipboard,
-                  modifier = Modifier.testTag("save_detected_button"),
-                ) {
-                  Text(stringResource(R.string.home_save_detected))
-                }
                 TextButton(
-                  onClick = onDismissDetectedClipboard,
-                  modifier = Modifier.testTag("dismiss_detected_button"),
+                  onClick = onUndoAutoCaptured,
+                  modifier = Modifier.testTag("undo_auto_captured_btn"),
                 ) {
-                  Text(stringResource(R.string.action_cancel))
+                  Text(stringResource(R.string.home_action_undo))
+                }
+                if (!banner.autoMarkedSensitive) {
+                  TextButton(
+                    onClick = onMarkBannerSensitive,
+                    modifier = Modifier.testTag("mark_sensitive_banner_btn"),
+                  ) {
+                    Text(stringResource(R.string.home_action_mark_sensitive))
+                  }
                 }
               }
             }
@@ -300,7 +368,7 @@ fun HomeScreen(
       item {
         SectionHeader(
           title = stringResource(R.string.home_recent_clips),
-          trailingText = "${clips.size}",
+          trailingText = "$totalActiveCount",
         )
       }
 

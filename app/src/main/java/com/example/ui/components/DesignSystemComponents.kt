@@ -243,3 +243,64 @@ sealed interface UiText {
     }
 }
 
+@Composable
+fun StorageCapacityBanner(
+  stats: com.example.domain.model.StorageCapacityStats,
+  onBackupNow: () -> Unit,
+  onManageStorage: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val level = stats.thresholdLevel
+  if (level == com.example.domain.model.StorageThresholdLevel.NORMAL) return
+  val isCritical = level == com.example.domain.model.StorageThresholdLevel.CRITICAL_95
+  val containerColor =
+    if (isCritical) MaterialTheme.colorScheme.errorContainer
+    else MaterialTheme.colorScheme.secondaryContainer
+  val contentColor =
+    if (isCritical) MaterialTheme.colorScheme.onErrorContainer
+    else MaterialTheme.colorScheme.onSecondaryContainer
+  val msgRes =
+    when (level) {
+      com.example.domain.model.StorageThresholdLevel.CRITICAL_95 -> R.string.storage_banner_95
+      com.example.domain.model.StorageThresholdLevel.HIGH_85 -> R.string.storage_banner_85
+      else -> R.string.storage_banner_70
+    }
+
+  Surface(
+    color = containerColor,
+    shape = MaterialTheme.shapes.medium,
+    border = BorderStroke(1.dp, contentColor.copy(alpha = 0.25f)),
+    modifier = modifier.fillMaxWidth(),
+  ) {
+    Column(
+      modifier = Modifier.padding(14.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      Text(
+        text = stringResource(msgRes, stats.usagePercent),
+        style = MaterialTheme.typography.bodyMedium,
+        color = contentColor,
+      )
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(onClick = onBackupNow) {
+          Text(stringResource(R.string.storage_action_backup), color = contentColor)
+        }
+        TextButton(onClick = onManageStorage) {
+          Text(stringResource(R.string.storage_action_manage), color = contentColor)
+        }
+      }
+    }
+  }
+}
+
+fun formatBytesHuman(bytes: Long): String {
+  val b = bytes.coerceAtLeast(0L)
+  return when {
+    b < 1024L -> "$b B"
+    b < 1024L * 1024L -> String.format(Locale.US, "%.1f KB", b / 1024.0)
+    b < 1024L * 1024L * 1024L -> String.format(Locale.US, "%.2f MB", b / (1024.0 * 1024.0))
+    else -> String.format(Locale.US, "%.2f GB", b / (1024.0 * 1024.0 * 1024.0))
+  }
+}
+
+

@@ -18,6 +18,7 @@ import com.example.data.local.SmartClipboardDatabase
 import com.example.data.repository.CategoryRepositoryImpl
 import com.example.data.repository.ClipRepositoryImpl
 import com.example.data.repository.SyncLogRepositoryImpl
+import com.example.data.repository.SyncQueueRepositoryImpl
 import com.example.domain.model.ClipItem
 import com.example.domain.model.SyncProviderId
 import com.example.domain.model.TelegramConfig
@@ -187,6 +188,7 @@ class SyncCrashReproductionTest {
       val clipRepo = ClipRepositoryImpl(db.clipDao(), crypto, SystemClipboardHelper(context))
       val categoryRepo = CategoryRepositoryImpl(db.categoryDao())
       val syncLogRepo = SyncLogRepositoryImpl(db.syncLogDao())
+      val syncQueueRepo = SyncQueueRepositoryImpl(db.syncQueueDao())
 
       val crashingProvider =
         object : IntegrationProvider {
@@ -200,7 +202,15 @@ class SyncCrashReproductionTest {
         }
 
       val engine =
-        SyncEngine(context, setOf(crashingProvider), clipRepo, categoryRepo, syncLogRepo, prefs)
+        SyncEngine(
+          context,
+          setOf(crashingProvider),
+          clipRepo,
+          categoryRepo,
+          syncLogRepo,
+          syncQueueRepo,
+          prefs,
+        )
 
       val singleRes = engine.syncSingleProvider(SyncProviderId.TELEGRAM)
       assertTrue(singleRes is ProviderResult.Error)

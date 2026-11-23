@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
@@ -65,11 +67,13 @@ import com.example.core.preferences.UserSettings
 import com.example.core.sync.SyncEngineState
 import com.example.domain.model.DiscordConfig
 import com.example.domain.model.GoogleDriveConfig
+import com.example.domain.model.QueueSummary
 import com.example.domain.model.SyncLog
 import com.example.domain.model.SyncStatus
 import com.example.domain.model.TelegramConfig
 import com.example.domain.usecase.ExportFormat
 import com.example.integrations.gdrive.DriveFileDto
+import com.example.ui.components.ProvideSafeTextToolbar
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.StatusPill
 import com.example.ui.components.VaultSectionCard
@@ -83,6 +87,7 @@ import kotlinx.coroutines.launch
 fun BackupSyncScreen(
   viewModel: SyncIntegrationsViewModel,
   syncState: SyncEngineState,
+  queueSummary: QueueSummary = QueueSummary(),
   syncLogs: List<SyncLog>,
   userSettings: UserSettings,
   telegramConfig: TelegramConfig,
@@ -92,6 +97,8 @@ fun BackupSyncScreen(
   lastGlobalSyncAt: Long?,
   isBusy: Boolean,
   onOpenIntegrations: () -> Unit,
+  onOpenRecoveryCenter: () -> Unit = {},
+  onOpenStorageManager: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
@@ -144,7 +151,7 @@ fun BackupSyncScreen(
       contentPadding = PaddingValues(16.dp),
       verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-      // SECTION 1: Cloud Sync Engine & Provider Status
+      // SECTION 1: Cloud Sync Engine & Provider Status & Persistent Queue
       item {
         VaultSectionCard {
           Image(
@@ -189,7 +196,6 @@ fun BackupSyncScreen(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
           }
 
-          // Clear visual overview of all 3 providers
           FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -197,6 +203,47 @@ fun BackupSyncScreen(
             ProviderStatusChip("Telegram", tgReady)
             ProviderStatusChip("Discord", dcReady)
             ProviderStatusChip("Google Drive", driveConfig.enabled)
+          }
+
+          // Persistent Sync Queue summary strip
+          Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth().testTag("sync_queue_card"),
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(10.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = stringResource(R.string.sync_queue_summary_title),
+                  style = MaterialTheme.typography.labelLarge,
+                )
+                Text(
+                  text =
+                    stringResource(
+                      R.string.sync_queue_counts,
+                      queueSummary.pendingCount,
+                      queueSummary.uploadingCount,
+                      queueSummary.failedCount,
+                    ),
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+              if (queueSummary.failedCount > 0) {
+                TextButton(
+                  onClick = { viewModel.retryFailedQueue() },
+                  modifier = Modifier.testTag("retry_failed_queue_btn"),
+                ) {
+                  Icon(Icons.Filled.Refresh, null, Modifier.size(16.dp))
+                  Spacer(Modifier.width(4.dp))
+                  Text(stringResource(R.string.sync_queue_retry_btn))
+                }
+              }
+            }
           }
 
           HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -232,10 +279,29 @@ fun BackupSyncScreen(
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.sync_configure_providers))
           }
+
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+              onClick = onOpenRecoveryCenter,
+              modifier = Modifier.weight(1f).testTag("open_recovery_center_btn"),
+            ) {
+              Icon(Icons.Filled.CloudDownload, null, Modifier.size(18.dp))
+              Spacer(Modifier.width(6.dp))
+              Text(stringResource(R.string.sync_open_recovery_btn))
+            }
+            OutlinedButton(
+              onClick = onOpenStorageManager,
+              modifier = Modifier.weight(1f).testTag("open_storage_manager_btn"),
+            ) {
+              Icon(Icons.Filled.Storage, null, Modifier.size(18.dp))
+              Spacer(Modifier.width(6.dp))
+              Text(stringResource(R.string.sync_open_storage_btn))
+            }
+          }
         }
       }
 
-      // SECTION 2: Local Export & Restore (Visually separated from Cloud Sync)
+      // SECTION 2: Local Export & Restore
       item {
         VaultSectionCard(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
           Row(verticalAlignment = Alignment.CenterVertically) {
@@ -324,26 +390,41 @@ fun BackupSyncScreen(
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
               Button(
                 onClick = {
                   if (driveConfig.encryptBackups) {
                     showPassphraseDialogFor = "drive_backup"
                   } else {
-                    viewModel.backupToDriveNow(null)
+                    viewModel.backupToDriveNow(null, incrementalIfPossible = false)
                   }
                 },
                 enabled = !isBusy,
-                modifier = Modifier.weight(1f).testTag("drive_backup_now_btn"),
+                modifier = Modifier.testTag("drive_backup_now_btn"),
               ) {
                 Icon(Icons.Filled.Backup, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.sync_drive_backup_now))
               }
               OutlinedButton(
+                onClick = {
+                  if (driveConfig.encryptBackups) {
+                    showPassphraseDialogFor = "drive_delta"
+                  } else {
+                    viewModel.backupToDriveNow(null, incrementalIfPossible = true)
+                  }
+                },
+                enabled = !isBusy && driveConfig.lastBackupAt != null,
+                modifier = Modifier.testTag("drive_delta_backup_btn"),
+              ) {
+                Text(stringResource(R.string.drive_backup_delta_now))
+              }
+              OutlinedButton(
                 onClick = { viewModel.refreshDriveBackups() },
                 enabled = !isBusy,
-                modifier = Modifier.weight(1f),
               ) {
                 Text(stringResource(R.string.sync_drive_refresh))
               }
@@ -472,16 +553,18 @@ fun BackupSyncScreen(
       onDismissRequest = { showPassphraseDialogFor = null },
       title = { Text(stringResource(R.string.passphrase_title)) },
       text = {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Text(stringResource(R.string.passphrase_hint))
-          OutlinedTextField(
-            value = passphrase,
-            onValueChange = { passphrase = it },
-            label = { Text(stringResource(R.string.passphrase_label)) },
-            visualTransformation = PasswordVisualTransformation(),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("backup_passphrase_input"),
-          )
+        ProvideSafeTextToolbar {
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.passphrase_hint))
+            OutlinedTextField(
+              value = passphrase,
+              onValueChange = { passphrase = it },
+              label = { Text(stringResource(R.string.passphrase_label)) },
+              visualTransformation = PasswordVisualTransformation(),
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth().testTag("backup_passphrase_input"),
+            )
+          }
         }
       },
       confirmButton = {
@@ -495,7 +578,8 @@ fun BackupSyncScreen(
                 pendingPassphrase = passphrase
                 createDocumentLauncher.launch("smart_clipboard_encrypted.scbak")
               }
-              currentAction == "drive_backup" -> viewModel.backupToDriveNow(passphrase)
+              currentAction == "drive_backup" -> viewModel.backupToDriveNow(passphrase, false)
+              currentAction == "drive_delta" -> viewModel.backupToDriveNow(passphrase, true)
               currentAction == "restore_local" -> {
                 pendingRawLocalImport?.let { viewModel.restoreLocalFile(it, passphrase) }
                 pendingRawLocalImport = null

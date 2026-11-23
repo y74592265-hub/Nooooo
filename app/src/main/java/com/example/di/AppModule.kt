@@ -8,12 +8,15 @@ import com.example.data.local.CategoryDao
 import com.example.data.local.ClipDao
 import com.example.data.local.SmartClipboardDatabase
 import com.example.data.local.SyncLogDao
+import com.example.data.local.SyncQueueDao
 import com.example.data.repository.CategoryRepositoryImpl
 import com.example.data.repository.ClipRepositoryImpl
 import com.example.data.repository.SyncLogRepositoryImpl
+import com.example.data.repository.SyncQueueRepositoryImpl
 import com.example.domain.repository.CategoryRepository
 import com.example.domain.repository.ClipRepository
 import com.example.domain.repository.SyncLogRepository
+import com.example.domain.repository.SyncQueueRepository
 import com.example.integrations.IntegrationProvider
 import com.example.integrations.discord.DiscordApiService
 import com.example.integrations.discord.DiscordProvider
@@ -105,6 +108,7 @@ object AppModule {
   @Singleton
   fun provideDatabase(@ApplicationContext context: Context): SmartClipboardDatabase =
     Room.databaseBuilder(context, SmartClipboardDatabase::class.java, "smart_clipboard.db")
+      .addMigrations(SmartClipboardDatabase.MIGRATION_1_2)
       .addCallback(
         object : RoomDatabase.Callback() {
           override fun onCreate(db: SupportSQLiteDatabase) {
@@ -129,6 +133,8 @@ object AppModule {
 
   @Provides fun provideClipDao(db: SmartClipboardDatabase): ClipDao = db.clipDao()
 
+  @Provides fun provideSyncQueueDao(db: SmartClipboardDatabase): SyncQueueDao = db.syncQueueDao()
+
   @Provides fun provideCategoryDao(db: SmartClipboardDatabase): CategoryDao = db.categoryDao()
 
   @Provides fun provideSyncLogDao(db: SmartClipboardDatabase): SyncLogDao = db.syncLogDao()
@@ -138,6 +144,10 @@ object AppModule {
 @InstallIn(SingletonComponent::class)
 abstract class BindingsModule {
   @Binds @Singleton abstract fun bindClipRepository(impl: ClipRepositoryImpl): ClipRepository
+
+  @Binds
+  @Singleton
+  abstract fun bindSyncQueueRepository(impl: SyncQueueRepositoryImpl): SyncQueueRepository
 
   @Binds
   @Singleton

@@ -3,6 +3,8 @@ package com.example.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.R
+import com.example.core.clipboard.CaptureOutcome
+import com.example.core.clipboard.ClipboardCaptureCoordinator
 import com.example.core.clipboard.SystemClipboardHelper
 import com.example.core.preferences.AppPreferencesRepository
 import com.example.core.security.KeystoreCryptoManager
@@ -11,6 +13,8 @@ import com.example.domain.model.Category
 import com.example.domain.model.ClipContentType
 import com.example.domain.model.ClipItem
 import com.example.domain.model.ClipSource
+import com.example.domain.model.ClipSyncState
+import com.example.domain.model.StorageCapacityStats
 import com.example.domain.model.SyncProviderId
 import com.example.domain.repository.CategoryRepository
 import com.example.domain.repository.ClipRepository
@@ -19,11 +23,13 @@ import com.example.domain.usecase.SaveClipUseCase
 import com.example.domain.usecase.SearchFilter
 import com.example.domain.usecase.SearchSortOrder
 import com.example.domain.usecase.SmartSearchUseCase
+import com.example.domain.usecase.StorageCapacityUseCase
 import com.example.integrations.ProviderResult
 import com.example.ui.components.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,11 +41,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
+
+data class AutoCapturedBannerState(
+  val clip: ClipItem,
+  val autoMarkedSensitive: Boolean,
+  val sensitiveReason: String?,
+  val queuedProviders: List<SyncProviderId>,
+)
 
 @HiltViewModel
 class ClipboardViewModel
@@ -50,10 +64,22 @@ constructor(
   private val saveClipUseCase: SaveClipUseCase,
   private val smartSearchUseCase: SmartSearchUseCase,
   private val clipboardHelper: SystemClipboardHelper,
+  private val captureCoordinator: ClipboardCaptureCoordinator,
+  private val storageCapacityUseCase: StorageCapacityUseCase,
   private val cryptoManager: KeystoreCryptoManager,
   private val prefs: AppPreferencesRepository,
   private val syncEngine: SyncEngine,
 ) : ViewModel() {
+
+  companion object {
+    const val PAGE_INCREMENT = 50
+  }
+
+  private val _storageStats = MutableStateFlow<StorageCapacityStats?>(null)
+  val storageStats: StateFlow<StorageCapacityStats?> = _storageStats.asStateFlow()
+
+  private val _pagedLimit = MutableStateFlow(PAGE_INCREMENT)
+  val pagedLimit: StateFlow<Int> = _pagedLimit.asStateFlow()
 
   init {
     viewModelScope.launch {
@@ -62,6 +88,7 @@ constructor(
       if (settings.historyRetentionDays > 0) {
         clipRepository.purgeExpiredHistory(settings.historyRetentionDays)
       }
+      refreshStorageStats()
     }
   }
 
@@ -69,6 +96,17 @@ constructor(
     clipRepository
       .observeActiveClips()
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val pagedActiveClips: StateFlow<List<ClipItem>> =
+    _pagedLimit
+      .flatMapLatest { limit -> clipRepository.observeActiveClipsPaged(limit) }
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  val totalActiveClipCount: StateFlow<Int> =
+    clipRepository
+      .observeTotalActiveCount()
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
   val favoriteClips: StateFlow<List<ClipItem>> =
     clipRepository
@@ -88,13 +126,15 @@ constructor(
   private val _searchFilter = MutableStateFlow(SearchFilter())
   val searchFilter: StateFlow<SearchFilter> = _searchFilter.asStateFlow()
 
-  @OptIn(FlowPreview::class)
+  @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
   val searchResults: StateFlow<List<ClipItem>> =
     combine(
-        activeClips,
         _searchFilter.debounce { if (it.query.isNotBlank()) 120L else 0L },
-      ) { clips, filter ->
-        smartSearchUseCase(clips, filter)
+        totalActiveClipCount,
+      ) { filter, _ -> filter }
+      .mapLatest { filter ->
+        val candidates = clipRepository.searchActiveClipsFts(filter = filter, limit = 200)
+        smartSearchUseCase(candidates, filter)
       }
       .flowOn(Dispatchers.Default)
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -102,54 +142,72 @@ constructor(
   private val _selectedClipIds = MutableStateFlow<Set<Long>>(emptySet())
   val selectedClipIds: StateFlow<Set<Long>> = _selectedClipIds.asStateFlow()
 
-  private val _detectedClipboardText = MutableStateFlow<String?>(null)
-  val detectedClipboardText: StateFlow<String?> = _detectedClipboardText.asStateFlow()
+  private val _lastAutoCapturedBanner = MutableStateFlow<AutoCapturedBannerState?>(null)
+  val lastAutoCapturedBanner: StateFlow<AutoCapturedBannerState?> =
+    _lastAutoCapturedBanner.asStateFlow()
 
   private val _snackbarEvents = MutableSharedFlow<UiText>(extraBufferCapacity = 8)
   val snackbarEvents: SharedFlow<UiText> = _snackbarEvents.asSharedFlow()
-
-  @Volatile private var lastObservedClipboardText: String? = null
 
   fun observeClip(clipId: Long) = clipRepository.observeClipById(clipId)
 
   fun readSystemClipboardNow(): String? = clipboardHelper.readCurrentClipboardText()
 
+  fun loadMorePagedClips() {
+    _pagedLimit.value += PAGE_INCREMENT
+  }
+
+  fun refreshStorageStats() {
+    viewModelScope.launch {
+      _storageStats.value = runCatching { storageCapacityUseCase.computeStats() }.getOrNull()
+    }
+  }
+
+  /**
+   * Autonomous zero-prompt foreground capture (replaces old blocking Save confirmation prompt).
+   */
   fun onAppWindowFocused() {
-    val currentText = clipboardHelper.readCurrentClipboardText() ?: return
-    if (currentText == lastObservedClipboardText) return
-    lastObservedClipboardText = currentText
     viewModelScope.launch {
-      val settings = prefs.userSettings.first()
-      if (!settings.autoCaptureOnForeground) return@launch
-      val hash = withContext(Dispatchers.Default) { cryptoManager.sha256(currentText) }
-      if (hash != settings.lastDetectedClipHash) {
-        _detectedClipboardText.value = currentText
+      when (
+        val outcome =
+          captureCoordinator.captureFromSystemClipboard(source = ClipSource.CLIPBOARD)
+      ) {
+        is CaptureOutcome.Saved -> {
+          _lastAutoCapturedBanner.value =
+            AutoCapturedBannerState(
+              clip = outcome.clip,
+              autoMarkedSensitive = outcome.autoMarkedSensitive,
+              sensitiveReason = outcome.sensitiveReason,
+              queuedProviders = outcome.queuedProviders,
+            )
+          refreshStorageStats()
+        }
+        is CaptureOutcome.SkippedSensitive -> {
+          _snackbarEvents.emit(UiText.Resource(R.string.msg_sensitive_skipped))
+        }
+        else -> Unit
       }
     }
   }
 
-  fun dismissDetectedClipboard() {
-    viewModelScope.launch {
-      _detectedClipboardText.value?.let { text ->
-        prefs.updateLastDetectedClipHash(cryptoManager.sha256(text))
-      }
-      _detectedClipboardText.value = null
-    }
+  fun dismissAutoCapturedBanner() {
+    _lastAutoCapturedBanner.value = null
   }
 
-  fun saveDetectedClipboard() {
-    val text = _detectedClipboardText.value ?: return
+  fun undoAutoCapturedClip() {
+    val banner = _lastAutoCapturedBanner.value ?: return
+    _lastAutoCapturedBanner.value = null
+    moveToTrash(listOf(banner.clip.id))
+  }
+
+  fun markBannerClipSensitive() {
+    val banner = _lastAutoCapturedBanner.value ?: return
+    _lastAutoCapturedBanner.value = null
     viewModelScope.launch {
-      prefs.updateLastDetectedClipHash(cryptoManager.sha256(text))
-      _detectedClipboardText.value = null
-      saveClip(
-        title = "",
-        content = text,
-        categoryId = null,
-        tags = emptyList(),
-        isSensitive = false,
-        source = ClipSource.CLIPBOARD,
+      clipRepository.updateClip(
+        banner.clip.copy(isSensitive = true, syncStatus = ClipSyncState.LOCAL_ONLY)
       )
+      _snackbarEvents.emit(UiText.Resource(R.string.msg_marked_sensitive_local))
     }
   }
 
@@ -163,6 +221,10 @@ constructor(
     source: ClipSource = ClipSource.MANUAL,
   ) {
     viewModelScope.launch {
+      val settings = prefs.userSettings.first()
+      val initialStatus =
+        if (isSensitive && settings.blockSensitiveCloudSync) ClipSyncState.LOCAL_ONLY
+        else ClipSyncState.PENDING
       val result =
         saveClipUseCase(
           title = title,
@@ -172,9 +234,14 @@ constructor(
           tags = tags,
           isSensitive = isSensitive,
           source = source,
+          syncStatus = initialStatus,
         )
       if (result != null) {
         prefs.updateLastDetectedClipHash(cryptoManager.sha256(content))
+        if (!isSensitive || !settings.blockSensitiveCloudSync) {
+          captureCoordinator.enqueueClipForSync(result.clipId)
+        }
+        refreshStorageStats()
         _snackbarEvents.emit(
           UiText.Resource(
             if (result.wasDuplicateMerged) R.string.msg_clip_merged else R.string.msg_clip_saved
@@ -187,6 +254,10 @@ constructor(
   fun updateClip(clip: ClipItem) {
     viewModelScope.launch {
       clipRepository.updateClip(clip)
+      if (!clip.isSensitive) {
+        captureCoordinator.enqueueClipForSync(clip.id)
+      }
+      refreshStorageStats()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_clip_updated))
     }
   }
@@ -211,20 +282,43 @@ constructor(
     viewModelScope.launch {
       clipRepository.moveToTrash(ids)
       _selectedClipIds.value = emptySet()
+      refreshStorageStats()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_moved_to_trash, listOf(ids.size)))
+    }
+  }
+
+  fun deleteClipsFromStorage(ids: List<Long>, includeUnsynced: Boolean = false) {
+    viewModelScope.launch {
+      val victims = ids.mapNotNull { clipRepository.getClipById(it) }
+      val allowed =
+        if (includeUnsynced) victims
+        else victims.filter { storageCapacityUseCase.isSafeToDeleteWithoutCloudLoss(it) }
+      if (allowed.isEmpty()) {
+        _snackbarEvents.emit(UiText.Resource(R.string.storage_unsynced_protected))
+        return@launch
+      }
+      allowed.forEach { syncEngine.enqueueDeleteForClip(it) }
+      clipRepository.moveToTrash(allowed.map { it.id })
+      refreshStorageStats()
+      _snackbarEvents.emit(UiText.Resource(R.string.msg_moved_to_trash, listOf(allowed.size)))
     }
   }
 
   fun restoreFromTrash(ids: List<Long>) {
     viewModelScope.launch {
       clipRepository.restoreFromTrash(ids)
+      refreshStorageStats()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_restored_items, listOf(ids.size)))
     }
   }
 
   fun deleteForever(ids: List<Long>) {
     viewModelScope.launch {
+      for (id in ids) {
+        clipRepository.getClipById(id)?.let { syncEngine.enqueueDeleteForClip(it) }
+      }
       clipRepository.deleteForever(ids)
+      refreshStorageStats()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_deleted_forever, listOf(ids.size)))
     }
   }
@@ -232,6 +326,7 @@ constructor(
   fun emptyTrash() {
     viewModelScope.launch {
       clipRepository.emptyTrash()
+      refreshStorageStats()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_trash_emptied))
     }
   }

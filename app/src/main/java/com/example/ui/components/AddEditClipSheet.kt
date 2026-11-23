@@ -35,6 +35,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -78,7 +80,10 @@ fun AddEditClipSheet(
     sheetState = sheetState,
     containerColor = MaterialTheme.colorScheme.surface,
   ) {
-    Column(
+    ProvideSafeTextToolbar {
+      val focusManager = LocalFocusManager.current
+      val textToolbar = LocalTextToolbar.current
+      Column(
       modifier =
         Modifier
           .fillMaxWidth()
@@ -218,13 +223,19 @@ fun AddEditClipSheet(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         OutlinedButton(
-          onClick = onDismiss,
+          onClick = {
+            textToolbar.hide()
+            focusManager.clearFocus()
+            onDismiss()
+          },
           modifier = Modifier.weight(1f).testTag("cancel_clip_button"),
         ) {
           Text(stringResource(R.string.action_cancel))
         }
         Button(
           onClick = {
+            textToolbar.hide()
+            focusManager.clearFocus()
             val tags =
               tagsText.split(",", "،").map { it.trim().removePrefix("#") }.filter { it.isNotEmpty() }
             onSave(title, content, selectedCategoryId, tags, isSensitive, selectedType)
@@ -235,6 +246,7 @@ fun AddEditClipSheet(
           Text(stringResource(R.string.action_save))
         }
       }
+    }
     }
   }
 }

@@ -44,10 +44,20 @@ data class UserSettings(
   val language: AppLanguage = AppLanguage.ARABIC,
   val appLockEnabled: Boolean = false,
   val autoCaptureOnForeground: Boolean = true,
+  val instantAutoSave: Boolean = true,
+  val autoDetectSensitivePatterns: Boolean = true,
+  val blockSensitiveCloudSync: Boolean = true,
+  val skipAutoSaveSensitive: Boolean = false,
+  val excludedSourceAppsCsv: String = "",
+  val deleteCloudOnLocalDelete: Boolean = false,
   val historyRetentionDays: Int = 30, // 0 = forever
   val autoSyncEnabled: Boolean = false,
   val autoSyncIntervalHours: Int = 6,
   val lastDetectedClipHash: String = "",
+  val storageSoftQuotaMb: Int = 50,
+  val storageWarnThreshold1: Int = 70,
+  val storageWarnThreshold2: Int = 85,
+  val storageWarnThreshold3: Int = 95,
 )
 
 @Singleton
@@ -63,11 +73,21 @@ constructor(
     val APP_LANGUAGE = stringPreferencesKey("app_language")
     val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
     val AUTO_CAPTURE = booleanPreferencesKey("auto_capture_foreground")
+    val INSTANT_AUTO_SAVE = booleanPreferencesKey("instant_auto_save")
+    val AUTO_DETECT_SENSITIVE = booleanPreferencesKey("auto_detect_sensitive")
+    val BLOCK_SENSITIVE_CLOUD = booleanPreferencesKey("block_sensitive_cloud")
+    val SKIP_AUTO_SAVE_SENSITIVE = booleanPreferencesKey("skip_auto_save_sensitive")
+    val EXCLUDED_SOURCE_APPS = stringPreferencesKey("excluded_source_apps_csv")
+    val DELETE_CLOUD_ON_LOCAL_DELETE = booleanPreferencesKey("delete_cloud_on_local_delete")
     val RETENTION_DAYS = intPreferencesKey("history_retention_days")
     val AUTO_SYNC_ENABLED = booleanPreferencesKey("auto_sync_enabled")
     val AUTO_SYNC_INTERVAL_HOURS = intPreferencesKey("auto_sync_interval_hours")
     val LAST_DETECTED_HASH = stringPreferencesKey("last_detected_clip_hash")
     val LAST_GLOBAL_SYNC_AT = longPreferencesKey("last_global_sync_at")
+    val STORAGE_SOFT_QUOTA_MB = intPreferencesKey("storage_soft_quota_mb")
+    val STORAGE_WARN_1 = intPreferencesKey("storage_warn_1")
+    val STORAGE_WARN_2 = intPreferencesKey("storage_warn_2")
+    val STORAGE_WARN_3 = intPreferencesKey("storage_warn_3")
 
     val TELEGRAM_CONFIG_ENC = stringPreferencesKey("telegram_config_enc")
     val DISCORD_CONFIG_ENC = stringPreferencesKey("discord_config_enc")
@@ -86,10 +106,20 @@ constructor(
               .getOrDefault(AppLanguage.ARABIC),
           appLockEnabled = prefs[Keys.APP_LOCK_ENABLED] ?: false,
           autoCaptureOnForeground = prefs[Keys.AUTO_CAPTURE] ?: true,
+          instantAutoSave = prefs[Keys.INSTANT_AUTO_SAVE] ?: true,
+          autoDetectSensitivePatterns = prefs[Keys.AUTO_DETECT_SENSITIVE] ?: true,
+          blockSensitiveCloudSync = prefs[Keys.BLOCK_SENSITIVE_CLOUD] ?: true,
+          skipAutoSaveSensitive = prefs[Keys.SKIP_AUTO_SAVE_SENSITIVE] ?: false,
+          excludedSourceAppsCsv = prefs[Keys.EXCLUDED_SOURCE_APPS] ?: "",
+          deleteCloudOnLocalDelete = prefs[Keys.DELETE_CLOUD_ON_LOCAL_DELETE] ?: false,
           historyRetentionDays = prefs[Keys.RETENTION_DAYS] ?: 30,
           autoSyncEnabled = prefs[Keys.AUTO_SYNC_ENABLED] ?: false,
           autoSyncIntervalHours = prefs[Keys.AUTO_SYNC_INTERVAL_HOURS] ?: 6,
           lastDetectedClipHash = prefs[Keys.LAST_DETECTED_HASH] ?: "",
+          storageSoftQuotaMb = prefs[Keys.STORAGE_SOFT_QUOTA_MB] ?: 50,
+          storageWarnThreshold1 = prefs[Keys.STORAGE_WARN_1] ?: 70,
+          storageWarnThreshold2 = prefs[Keys.STORAGE_WARN_2] ?: 85,
+          storageWarnThreshold3 = prefs[Keys.STORAGE_WARN_3] ?: 95,
         )
       }
       .distinctUntilChanged()
@@ -135,6 +165,78 @@ constructor(
 
   suspend fun updateAutoCapture(enabled: Boolean) {
     context.smartClipboardDataStore.edit { it[Keys.AUTO_CAPTURE] = enabled }
+  }
+
+  suspend fun updateInstantAutoSave(enabled: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.INSTANT_AUTO_SAVE] = enabled }
+  }
+
+  suspend fun updateSensitivePolicy(
+    autoDetectPatterns: Boolean,
+    blockCloudSync: Boolean,
+    skipAutoSave: Boolean,
+  ) {
+    context.smartClipboardDataStore.edit {
+      it[Keys.AUTO_DETECT_SENSITIVE] = autoDetectPatterns
+      it[Keys.BLOCK_SENSITIVE_CLOUD] = blockCloudSync
+      it[Keys.SKIP_AUTO_SAVE_SENSITIVE] = skipAutoSave
+    }
+  }
+
+  suspend fun updateAutoDetectSensitivePatterns(enabled: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.AUTO_DETECT_SENSITIVE] = enabled }
+  }
+
+  suspend fun updateBlockSensitiveCloudSync(enabled: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.BLOCK_SENSITIVE_CLOUD] = enabled }
+  }
+
+  suspend fun updateSkipAutoSaveSensitive(enabled: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.SKIP_AUTO_SAVE_SENSITIVE] = enabled }
+  }
+
+  suspend fun updateExcludedAppsCsv(csv: String) {
+    context.smartClipboardDataStore.edit { it[Keys.EXCLUDED_SOURCE_APPS] = csv.trim() }
+  }
+
+  suspend fun updateExcludedSourceAppsCsv(csv: String) = updateExcludedAppsCsv(csv)
+
+  suspend fun updateDeleteCloudOnLocalDelete(enabled: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.DELETE_CLOUD_ON_LOCAL_DELETE] = enabled }
+  }
+
+  suspend fun updateStorageSoftQuotaMb(softQuotaMb: Int) {
+    context.smartClipboardDataStore.edit {
+      it[Keys.STORAGE_SOFT_QUOTA_MB] = softQuotaMb.coerceIn(5, 2048)
+    }
+  }
+
+  suspend fun updateStorageWarnThresholds(warn1: Int, warn2: Int, warn3: Int) {
+    val w1 = warn1.coerceIn(40, 90)
+    val w2 = warn2.coerceIn(w1 + 5, 95)
+    val w3 = warn3.coerceIn(w2 + 3, 99)
+    context.smartClipboardDataStore.edit {
+      it[Keys.STORAGE_WARN_1] = w1
+      it[Keys.STORAGE_WARN_2] = w2
+      it[Keys.STORAGE_WARN_3] = w3
+    }
+  }
+
+  suspend fun updateStorageThresholds(
+    softQuotaMb: Int,
+    warn1: Int = 70,
+    warn2: Int = 85,
+    warn3: Int = 95,
+  ) {
+    val w1 = warn1.coerceIn(40, 90)
+    val w2 = warn2.coerceIn(w1 + 5, 95)
+    val w3 = warn3.coerceIn(w2 + 3, 99)
+    context.smartClipboardDataStore.edit {
+      it[Keys.STORAGE_SOFT_QUOTA_MB] = softQuotaMb.coerceIn(5, 2048)
+      it[Keys.STORAGE_WARN_1] = w1
+      it[Keys.STORAGE_WARN_2] = w2
+      it[Keys.STORAGE_WARN_3] = w3
+    }
   }
 
   suspend fun updateRetentionDays(days: Int) {

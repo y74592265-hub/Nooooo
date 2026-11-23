@@ -43,6 +43,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Optional Companion Clipboard Keyboard (disabled by default in system settings) -->
+        <service
+            android:name=".core.ime.SmartClipboardImeService"
+            android:exported="true"
+            android:label="@string/ime_service_name"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/smart_clipboard_ime" />
+        </service>
+
         <!-- Custom WorkManager initialization for HiltWorkerFactory -->
         <provider
             android:name="androidx.startup.InitializationProvider"
