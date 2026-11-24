@@ -34,14 +34,38 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+        </activity>
 
-            <!-- Context menu text selection action -->
-            <intent-filter>
+        <!-- Translucent Quick Capture Activity for Quick Settings Tile & Context Menu Quick Save -->
+        <activity
+            android:name=".core.clipboard.QuickCaptureActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/process_text_quick_save"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SmartClipboard.Translucent">
+            <intent-filter android:label="@string/process_text_quick_save">
                 <action android:name="android.intent.action.PROCESS_TEXT" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <!-- Quick Settings Tile for instant clipboard capture without leaving current app -->
+        <service
+            android:name=".core.clipboard.ClipboardCaptureTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_qs_capture_clip"
+            android:label="@string/qs_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="false" />
+        </service>
 
         <!-- Optional Companion Clipboard Keyboard (disabled by default in system settings) -->
         <service

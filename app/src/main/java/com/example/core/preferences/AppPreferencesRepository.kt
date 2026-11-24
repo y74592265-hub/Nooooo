@@ -58,6 +58,7 @@ data class UserSettings(
   val storageWarnThreshold1: Int = 70,
   val storageWarnThreshold2: Int = 85,
   val storageWarnThreshold3: Int = 95,
+  val multiCopyTipDismissed: Boolean = false,
 )
 
 @Singleton
@@ -88,6 +89,7 @@ constructor(
     val STORAGE_WARN_1 = intPreferencesKey("storage_warn_1")
     val STORAGE_WARN_2 = intPreferencesKey("storage_warn_2")
     val STORAGE_WARN_3 = intPreferencesKey("storage_warn_3")
+    val MULTI_COPY_TIP_DISMISSED = booleanPreferencesKey("multi_copy_tip_dismissed")
 
     val TELEGRAM_CONFIG_ENC = stringPreferencesKey("telegram_config_enc")
     val DISCORD_CONFIG_ENC = stringPreferencesKey("discord_config_enc")
@@ -120,6 +122,7 @@ constructor(
           storageWarnThreshold1 = prefs[Keys.STORAGE_WARN_1] ?: 70,
           storageWarnThreshold2 = prefs[Keys.STORAGE_WARN_2] ?: 85,
           storageWarnThreshold3 = prefs[Keys.STORAGE_WARN_3] ?: 95,
+          multiCopyTipDismissed = prefs[Keys.MULTI_COPY_TIP_DISMISSED] ?: false,
         )
       }
       .distinctUntilChanged()
@@ -256,6 +259,10 @@ constructor(
 
   suspend fun updateLastGlobalSyncAt(timestamp: Long) {
     context.smartClipboardDataStore.edit { it[Keys.LAST_GLOBAL_SYNC_AT] = timestamp }
+  }
+
+  suspend fun updateMultiCopyTipDismissed(dismissed: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.MULTI_COPY_TIP_DISMISSED] = dismissed }
   }
 
   suspend fun saveTelegramConfig(config: TelegramConfig) {

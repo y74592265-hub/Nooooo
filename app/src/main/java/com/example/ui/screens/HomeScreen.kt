@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
@@ -92,6 +93,10 @@ fun HomeScreen(
   onOpenTrash: () -> Unit,
   onOpenSettings: () -> Unit,
   onOpenBackupSync: () -> Unit,
+  showMultiCopyGuide: Boolean = false,
+  onAddQuickCaptureTile: () -> Unit = {},
+  onOpenImeSettings: () -> Unit = {},
+  onDismissMultiCopyGuide: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val categoryMap = remember(categories) { categories.associateBy { it.id } }
@@ -207,6 +212,69 @@ fun HomeScreen(
             onManageStorage = onOpenStorage,
             modifier = Modifier.testTag("home_storage_banner"),
           )
+        }
+      }
+
+      // Multi-Copy Guide Card (explains Android 10+ background rule & 1-tap QS Tile / Quick Save)
+      if (showMultiCopyGuide) {
+        item {
+          Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
+            shape = MaterialTheme.shapes.medium,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.28f)),
+            modifier = Modifier.fillMaxWidth().testTag("multicopy_guide_card"),
+          ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+              ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                  Icon(
+                    imageVector = Icons.Filled.TouchApp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp),
+                  )
+                  Spacer(Modifier.width(8.dp))
+                  Text(
+                    text = stringResource(R.string.multicopy_guide_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                  )
+                }
+                TextButton(
+                  onClick = onDismissMultiCopyGuide,
+                  modifier = Modifier.testTag("dismiss_multicopy_guide_btn"),
+                ) {
+                  Text(stringResource(R.string.multicopy_dismiss_btn))
+                }
+              }
+              Text(
+                text = stringResource(R.string.multicopy_guide_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.92f),
+              )
+              Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+              ) {
+                OutlinedButton(
+                  onClick = onAddQuickCaptureTile,
+                  modifier = Modifier.testTag("home_add_qs_tile_btn"),
+                ) {
+                  Text(stringResource(R.string.multicopy_add_tile_btn))
+                }
+                OutlinedButton(
+                  onClick = onOpenImeSettings,
+                  modifier = Modifier.testTag("home_open_ime_btn"),
+                ) {
+                  Text(stringResource(R.string.settings_ime_open_btn))
+                }
+              }
+            }
+          }
         }
       }
 

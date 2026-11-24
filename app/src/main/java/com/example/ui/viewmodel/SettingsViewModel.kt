@@ -57,6 +57,14 @@ constructor(
     viewModelScope.launch { prefs.updateInstantAutoSave(enabled) }
   }
 
+  fun setMultiCopyTipDismissed(dismissed: Boolean) {
+    viewModelScope.launch { prefs.updateMultiCopyTipDismissed(dismissed) }
+  }
+
+  fun emitMessage(message: String) {
+    viewModelScope.launch { _events.emit(UiText.Dynamic(message)) }
+  }
+
   fun setAutoDetectSensitivePatterns(enabled: Boolean) {
     viewModelScope.launch { prefs.updateAutoDetectSensitivePatterns(enabled) }
   }

@@ -168,24 +168,26 @@ constructor(
    */
   fun onAppWindowFocused() {
     viewModelScope.launch {
-      when (
-        val outcome =
-          captureCoordinator.captureFromSystemClipboard(source = ClipSource.CLIPBOARD)
-      ) {
-        is CaptureOutcome.Saved -> {
-          _lastAutoCapturedBanner.value =
-            AutoCapturedBannerState(
-              clip = outcome.clip,
-              autoMarkedSensitive = outcome.autoMarkedSensitive,
-              sensitiveReason = outcome.sensitiveReason,
-              queuedProviders = outcome.queuedProviders,
-            )
-          refreshStorageStats()
+      val outcomes =
+        captureCoordinator.captureAllFromSystemClipboard(source = ClipSource.CLIPBOARD)
+      val savedList = outcomes.filterIsInstance<CaptureOutcome.Saved>()
+      if (savedList.isNotEmpty()) {
+        val latest = savedList.last()
+        _lastAutoCapturedBanner.value =
+          AutoCapturedBannerState(
+            clip = latest.clip,
+            autoMarkedSensitive = latest.autoMarkedSensitive,
+            sensitiveReason = latest.sensitiveReason,
+            queuedProviders = latest.queuedProviders,
+          )
+        refreshStorageStats()
+        if (savedList.size > 1) {
+          _snackbarEvents.emit(
+            UiText.Resource(R.string.quick_capture_saved_count, listOf(savedList.size))
+          )
         }
-        is CaptureOutcome.SkippedSensitive -> {
-          _snackbarEvents.emit(UiText.Resource(R.string.msg_sensitive_skipped))
-        }
-        else -> Unit
+      } else if (outcomes.any { it is CaptureOutcome.SkippedSensitive }) {
+        _snackbarEvents.emit(UiText.Resource(R.string.msg_sensitive_skipped))
       }
     }
   }

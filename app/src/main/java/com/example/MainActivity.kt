@@ -31,6 +31,7 @@ class MainActivity : FragmentActivity() {
   private var sharedIncomingText by mutableStateOf<String?>(null)
   private var isLocked by mutableStateOf(false)
   private var lockErrorMessage by mutableStateOf<String?>(null)
+  private var pendingFocusCapture = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -65,8 +66,13 @@ class MainActivity : FragmentActivity() {
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
-    if (hasFocus && !isLocked) {
-      clipboardViewModel.onAppWindowFocused()
+    if (hasFocus) {
+      if (!isLocked) {
+        pendingFocusCapture = false
+        clipboardViewModel.onAppWindowFocused()
+      } else {
+        pendingFocusCapture = true
+      }
     }
   }
 
@@ -106,6 +112,10 @@ class MainActivity : FragmentActivity() {
           override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
             isLocked = false
             lockErrorMessage = null
+            if (pendingFocusCapture || hasWindowFocus()) {
+              pendingFocusCapture = false
+              clipboardViewModel.onAppWindowFocused()
+            }
           }
 
           override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {

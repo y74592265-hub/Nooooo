@@ -408,4 +408,25 @@
     <string name="drive_copied_value">Copied to clipboard</string>
     <string name="drive_open_cloud_console">Open Google Cloud Console</string>
     <string name="drive_save_credentials">Save OAuth Credentials</string>
+
+    <!-- Multi-Copy Quick Capture & Android 10+ Guide -->
+    <string name="qs_tile_label">Capture Clip</string>
+    <string name="qs_tile_subtitle">Save clipboard</string>
+    <string name="process_text_quick_save">Quick Save Clip</string>
+    <string name="quick_capture_saved">Saved: %1$s</string>
+    <string name="quick_capture_saved_count">Saved %1$d clips</string>
+    <string name="quick_capture_sensitive">Sensitive item encrypted &amp; saved locally</string>
+    <string name="quick_capture_already_saved">Already saved in Smart Clipboard</string>
+    <string name="quick_capture_empty">System clipboard is empty</string>
+    <string name="quick_capture_excluded">Skipped by exclusion rule</string>
+    <string name="ime_captured_status">Saved «%1$s» (%2$d this session)</string>
+    <string name="ime_captured_sensitive_status">Encrypted sensitive item (%1$d this session)</string>
+    <string name="multicopy_guide_title">Save Multiple Copies in a Row</string>
+    <string name="multicopy_guide_body">Android 10+ blocks background apps from reading the clipboard and keeps only the latest copied item. To save every copy without switching apps:\n• Pull down &amp; tap “Capture Clip” Quick Tile after copying\n• Or highlight text → tap “Quick Save Clip”\n• Or enable the optional Companion Keyboard</string>
+    <string name="multicopy_add_tile_btn">Add Quick Capture Tile</string>
+    <string name="multicopy_tile_added">“Capture Clip” added to Quick Settings</string>
+    <string name="multicopy_tile_already_added">“Capture Clip” tile is already in Quick Settings</string>
+    <string name="multicopy_tile_manual_hint">Swipe down Quick Settings twice → Edit (pencil) → drag “Capture Clip” to active tiles.</string>
+    <string name="multicopy_dismiss_btn">Got it</string>
+    <string name="settings_multicopy_note">Android 10+ limits background clipboard access to the focused app or active keyboard, so copying twice outside the app overwrites the first item in system memory. Add the Quick Settings Tile below or use “Quick Save Clip” when selecting text to save every copy instantly.</string>
 </resources>

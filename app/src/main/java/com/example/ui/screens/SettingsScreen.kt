@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -51,6 +52,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.core.clipboard.QuickTileInstaller
 import com.example.core.preferences.AppLanguage
 import com.example.core.preferences.ThemeMode
 import com.example.core.preferences.UserSettings
@@ -75,6 +77,7 @@ fun SettingsScreen(
   onSaveExcludedAppsCsv: (String) -> Unit = {},
   onDeleteCloudToggle: (Boolean) -> Unit = {},
   onOpenStorageManager: () -> Unit = {},
+  onShowMessage: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
@@ -179,6 +182,22 @@ fun SettingsScreen(
           onCheckedChange = onInstantAutoSaveToggle,
           testTag = "instant_autosave_switch",
         )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        Text(
+          text = stringResource(R.string.settings_multicopy_note),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(
+          onClick = { QuickTileInstaller.requestAddCaptureTile(context, onShowMessage) },
+          modifier = Modifier.fillMaxWidth().testTag("add_qs_tile_btn"),
+        ) {
+          Icon(Icons.Filled.TouchApp, contentDescription = null)
+          Spacer(Modifier.width(8.dp))
+          Text(stringResource(R.string.multicopy_add_tile_btn))
+        }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 

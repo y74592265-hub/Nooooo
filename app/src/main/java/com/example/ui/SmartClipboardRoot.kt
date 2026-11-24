@@ -2,9 +2,11 @@ package com.example.ui
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.res.AssetManager
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.provider.Settings
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -83,6 +85,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.R
+import com.example.core.clipboard.QuickTileInstaller
 import com.example.core.preferences.AppLanguage
 import com.example.domain.model.ClipSource
 import com.example.ui.components.AddEditClipSheet
@@ -536,6 +539,22 @@ fun SmartClipboardRoot(
                     onOpenTrash = { navController.navigate(TrashRoute) },
                     onOpenSettings = { navController.navigate(SettingsRoute) },
                     onOpenBackupSync = { navigateTopLevel(BackupSyncRoute) },
+                    showMultiCopyGuide = !settings.multiCopyTipDismissed,
+                    onAddQuickCaptureTile = {
+                      QuickTileInstaller.requestAddCaptureTile(activeLocalizedContext) { msg ->
+                        settingsViewModel.emitMessage(msg)
+                      }
+                    },
+                    onOpenImeSettings = {
+                      runCatching {
+                        val imeIntent =
+                          Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                          }
+                        activeLocalizedContext.startActivity(imeIntent)
+                      }
+                    },
+                    onDismissMultiCopyGuide = { settingsViewModel.setMultiCopyTipDismissed(true) },
                   )
                 }
 
@@ -729,6 +748,7 @@ fun SmartClipboardRoot(
                     onSaveExcludedAppsCsv = settingsViewModel::setExcludedSourceAppsCsv,
                     onDeleteCloudToggle = settingsViewModel::setDeleteCloudOnLocalDelete,
                     onOpenStorageManager = { navController.navigate(StorageCapacityRoute) },
+                    onShowMessage = settingsViewModel::emitMessage,
                   )
                 }
 

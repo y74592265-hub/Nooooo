@@ -55,6 +55,9 @@ class SmartClipboardImeService : InputMethodService() {
   private var chipsContainer: LinearLayout? = null
   private var statusLabel: TextView? = null
 
+  private var capturedInSession = 0
+  private var isInputBarVisible = false
+
   private val entryPoint: SmartClipboardImeEntryPoint by lazy {
     EntryPointAccessors.fromApplication(applicationContext, SmartClipboardImeEntryPoint::class.java)
   }
@@ -63,7 +66,12 @@ class SmartClipboardImeService : InputMethodService() {
     super.onCreate()
     primaryClipListener =
       entryPoint.clipboardHelper().registerPrimaryClipListener {
-        captureCurrentClipboard()
+        val snapshots = entryPoint.clipboardHelper().readAllClipboardSnapshots()
+        captureSnapshots(
+          snapshots = snapshots,
+          packageHint = currentInputEditorInfo?.packageName,
+          toastIfHidden = true,
+        )
       }
   }
 
@@ -76,8 +84,15 @@ class SmartClipboardImeService : InputMethodService() {
 
   override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
     super.onStartInputView(info, restarting)
-    captureCurrentClipboard(info?.packageName)
+    isInputBarVisible = true
+    val snapshots = entryPoint.clipboardHelper().readAllClipboardSnapshots()
+    captureSnapshots(snapshots = snapshots, packageHint = info?.packageName, toastIfHidden = false)
     loadRecentClips()
+  }
+
+  override fun onFinishInputView(finishingInput: Boolean) {
+    isInputBarVisible = false
+    super.onFinishInputView(finishingInput)
   }
 
   override fun onCreateInputView(): View {
@@ -108,7 +123,12 @@ class SmartClipboardImeService : InputMethodService() {
 
     val captureNowBtn =
       buildActionChip(getString(R.string.action_paste_from_clipboard), 0xFF1E3A8A.toInt()) {
-        captureCurrentClipboard(currentInputEditorInfo?.packageName)
+        val snapshots = entryPoint.clipboardHelper().readAllClipboardSnapshots()
+        captureSnapshots(
+          snapshots = snapshots,
+          packageHint = currentInputEditorInfo?.packageName,
+          toastIfHidden = false,
+        )
       }
 
     val switchKeyboardBtn =
@@ -177,15 +197,44 @@ class SmartClipboardImeService : InputMethodService() {
     }
   }
 
-  private fun captureCurrentClipboard(packageHint: String? = null) {
+  private fun captureSnapshots(
+    snapshots: List<com.example.core.clipboard.SystemClipboardSnapshot>,
+    packageHint: String?,
+    toastIfHidden: Boolean,
+  ) {
+    if (snapshots.isEmpty()) return
     serviceScope.launch {
-      runCatching {
-        entryPoint
-          .captureCoordinator()
-          .captureFromSystemClipboard(
-            source = ClipSource.IME,
-            foregroundPackageHint = packageHint,
-          )
+      val outcomes =
+        runCatching {
+            entryPoint
+              .captureCoordinator()
+              .captureAllFromSystemClipboard(
+                source = ClipSource.IME,
+                foregroundPackageHint = packageHint,
+                overrideSnapshots = snapshots,
+                allowWhenAutoCaptureDisabled = true,
+              )
+          }
+          .getOrDefault(emptyList())
+
+      val saved = outcomes.filterIsInstance<com.example.core.clipboard.CaptureOutcome.Saved>()
+      if (saved.isNotEmpty()) {
+        capturedInSession += saved.size
+        val latest = saved.last()
+        val statusMsg =
+          if (latest.autoMarkedSensitive) {
+            getString(R.string.ime_captured_sensitive_status, capturedInSession)
+          } else {
+            val preview =
+              latest.clip.content.replace("\n", " ").trim().let {
+                if (it.length > 26) "${it.take(26)}…" else it
+              }
+            getString(R.string.ime_captured_status, preview, capturedInSession)
+          }
+        statusLabel?.text = statusMsg
+        if (toastIfHidden && !isInputBarVisible) {
+          android.widget.Toast.makeText(applicationContext, statusMsg, android.widget.Toast.LENGTH_SHORT).show()
+        }
       }
       loadRecentClips()
     }
@@ -215,7 +264,9 @@ class SmartClipboardImeService : InputMethodService() {
       statusLabel?.text = getString(R.string.ime_bar_empty)
       return
     }
-    statusLabel?.text = getString(R.string.ime_bar_hint)
+    if (capturedInSession == 0) {
+      statusLabel?.text = getString(R.string.ime_bar_hint)
+    }
 
     for (clip in pasteable) {
       val label = clip.title.ifBlank { clip.content }.replace("\n", " ").trim()

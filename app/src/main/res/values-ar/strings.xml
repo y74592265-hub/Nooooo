@@ -408,4 +408,25 @@
     <string name="drive_copied_value">تم النسخ للحافظة</string>
     <string name="drive_open_cloud_console">فتح Google Cloud Console</string>
     <string name="drive_save_credentials">حفظ بيانات OAuth</string>
+
+    <!-- Multi-Copy Quick Capture & Android 10+ Guide -->
+    <string name="qs_tile_label">التقاط الحافظة</string>
+    <string name="qs_tile_subtitle">حفظ فوري</string>
+    <string name="process_text_quick_save">حفظ سريع بالحافظة</string>
+    <string name="quick_capture_saved">تم حفظ: %1$s</string>
+    <string name="quick_capture_saved_count">تم حفظ %1$d نصوص</string>
+    <string name="quick_capture_sensitive">تم تشفير نص حساس وحفظه محليًا</string>
+    <string name="quick_capture_already_saved">محفوظ مسبقًا في الحافظة الذكية</string>
+    <string name="quick_capture_empty">حافظة النظام فارغة</string>
+    <string name="quick_capture_excluded">تم التخطي حسب قواعد الاستثناء</string>
+    <string name="ime_captured_status">تم حفظ «%1$s» (%2$d في هذه الجلسة)</string>
+    <string name="ime_captured_sensitive_status">تم تشفير عنصر حساس (%1$d في هذه الجلسة)</string>
+    <string name="multicopy_guide_title">حفظ أكثر من نص متتالي بدون ضياع</string>
+    <string name="multicopy_guide_body">أندرويد 10+ يمنع التطبيقات بالخلفية من قراءة الحافظة ويحتفظ بآخر نص منسوخ فقط. لحفظ كل نص فور نسخه دون مغادرة تطبيقك:\n• اسحب الشريط العلوي واضغط مربع «التقاط الحافظة» بعد كل نسخ\n• أو حدد النص → «حفظ سريع بالحافظة»\n• أو فعّل لوحة المفاتيح المساعدة</string>
+    <string name="multicopy_add_tile_btn">إضافة مربع الالتقاط السريع</string>
+    <string name="multicopy_tile_added">تمت إضافة مربع «التقاط الحافظة» إلى الإعدادات السريعة</string>
+    <string name="multicopy_tile_already_added">مربع «التقاط الحافظة» مضاف مسبقًا</string>
+    <string name="multicopy_tile_manual_hint">اسحب شريط الإشعارات مرتين ← تعديل (القلم) ← اسحب مربع «التقاط الحافظة» للأعلى.</string>
+    <string name="multicopy_dismiss_btn">فهمت</string>
+    <string name="settings_multicopy_note">يمنع نظام أندرويد 10+ قراءة الحافظة في الخلفية ويستبدل النص السابق عند النسخ مرتين قبل فتح التطبيق. أضف مربع «التقاط الحافظة» في الإعدادات السريعة أو استخدم «حفظ سريع بالحافظة» عند تحديد النص لحفظ كل نسخة فورًا.</string>
 </resources>

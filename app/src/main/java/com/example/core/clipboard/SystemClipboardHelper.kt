@@ -47,13 +47,15 @@ class SystemClipboardHelper @Inject constructor(@ApplicationContext private val 
 
   fun readCurrentClipboardText(): String? = readCurrentClipboardSnapshot()?.text
 
-  fun readCurrentClipboardSnapshot(): SystemClipboardSnapshot? {
-    val cm = clipboardManager ?: return null
-    if (!cm.hasPrimaryClip()) return null
-    val clip = cm.primaryClip ?: return null
-    if (clip.itemCount <= 0) return null
-    val text = clip.getItemAt(0).coerceToText(context)?.toString()?.trim()
-    if (text.isNullOrEmpty()) return null
+  fun readCurrentClipboardSnapshot(): SystemClipboardSnapshot? =
+    readAllClipboardSnapshots().firstOrNull()
+
+  fun readAllClipboardSnapshots(): List<SystemClipboardSnapshot> {
+    val cm = clipboardManager ?: return emptyList()
+    if (!cm.hasPrimaryClip()) return emptyList()
+    val clip = cm.primaryClip ?: return emptyList()
+    if (clip.itemCount <= 0) return emptyList()
+
     val extras = clip.description?.extras
     val sensitiveFlag =
       extras?.getBoolean(
@@ -61,7 +63,16 @@ class SystemClipboardHelper @Inject constructor(@ApplicationContext private val 
         else "android.content.extra.IS_SENSITIVE",
         false,
       ) == true || extras?.getBoolean("android.content.extra.IS_SENSITIVE", false) == true
-    return SystemClipboardSnapshot(text = text, isSystemSensitive = sensitiveFlag)
+
+    val seen = LinkedHashSet<String>()
+    val result = ArrayList<SystemClipboardSnapshot>(clip.itemCount)
+    for (i in 0 until clip.itemCount) {
+      val text = clip.getItemAt(i).coerceToText(context)?.toString()?.trim()
+      if (!text.isNullOrEmpty() && seen.add(text)) {
+        result.add(SystemClipboardSnapshot(text = text, isSystemSensitive = sensitiveFlag))
+      }
+    }
+    return result
   }
 
   fun registerPrimaryClipListener(
