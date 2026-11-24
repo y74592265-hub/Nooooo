@@ -108,6 +108,7 @@ object AppModule {
   @Singleton
   fun provideDatabase(@ApplicationContext context: Context): SmartClipboardDatabase =
     Room.databaseBuilder(context, SmartClipboardDatabase::class.java, "smart_clipboard.db")
+      .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
       .addMigrations(SmartClipboardDatabase.MIGRATION_1_2)
       .addCallback(
         object : RoomDatabase.Callback() {

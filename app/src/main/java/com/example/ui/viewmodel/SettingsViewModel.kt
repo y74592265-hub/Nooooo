@@ -1,8 +1,10 @@
 package com.example.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.R
+import com.example.core.clipboard.QuickCaptureNotificationHelper
 import com.example.core.clipboard.SystemClipboardHelper
 import com.example.core.preferences.AppLanguage
 import com.example.core.preferences.AppPreferencesRepository
@@ -12,11 +14,13 @@ import com.example.domain.repository.ClipRepository
 import com.example.domain.repository.SyncLogRepository
 import com.example.ui.components.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -25,6 +29,7 @@ import javax.inject.Inject
 class SettingsViewModel
 @Inject
 constructor(
+  @ApplicationContext private val appContext: Context,
   private val prefs: AppPreferencesRepository,
   private val clipRepository: ClipRepository,
   private val syncLogRepository: SyncLogRepository,
@@ -42,7 +47,13 @@ constructor(
   }
 
   fun setLanguage(language: AppLanguage) {
-    viewModelScope.launch { prefs.updateLanguage(language) }
+    viewModelScope.launch {
+      prefs.updateLanguage(language)
+      val enabled = prefs.userSettings.first().quickCaptureNotificationEnabled
+      if (enabled) {
+        QuickCaptureNotificationHelper.showOrCancel(appContext, enabled = true, language = language)
+      }
+    }
   }
 
   fun setAppLockEnabled(enabled: Boolean) {
@@ -55,6 +66,14 @@ constructor(
 
   fun setInstantAutoSave(enabled: Boolean) {
     viewModelScope.launch { prefs.updateInstantAutoSave(enabled) }
+  }
+
+  fun setQuickCaptureNotificationEnabled(enabled: Boolean) {
+    viewModelScope.launch {
+      prefs.updateQuickCaptureNotificationEnabled(enabled)
+      val language = prefs.userSettings.first().language
+      QuickCaptureNotificationHelper.showOrCancel(appContext, enabled = enabled, language = language)
+    }
   }
 
   fun setMultiCopyTipDismissed(dismissed: Boolean) {
@@ -116,6 +135,7 @@ constructor(
       clipRepository.wipeAllData()
       syncLogRepository.clearLogs()
       prefs.clearAllPreferences()
+      QuickCaptureNotificationHelper.showOrCancel(appContext, enabled = false)
       clipboardHelper.clearSystemClipboard()
       _events.emit(UiText.Resource(R.string.msg_all_data_wiped))
     }

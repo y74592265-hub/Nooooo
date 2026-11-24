@@ -240,19 +240,27 @@ fun AllClipsScreen(
               )
             }
           }
-          items(filtered, key = { it.id }) { clip ->
+          items(filtered, key = { it.id }, contentType = { "clip_card" }) { clip ->
+            val onOpenOrToggle =
+              remember(clip.id, inSelectionMode) {
+                {
+                  if (inSelectionMode) onToggleSelection(clip.id) else onOpenClipDetails(clip.id)
+                }
+              }
+            val onLong = remember(clip.id) { { onToggleSelection(clip.id) } }
+            val onCopy = remember(clip) { { onCopyClip(clip) } }
+            val onPin = remember(clip) { { onTogglePin(clip) } }
+            val onFav = remember(clip) { { onToggleFavorite(clip) } }
             ClipCard(
               clip = clip,
               category = categoryMap[clip.categoryId],
               isSelected = selectedClipIds.contains(clip.id),
               inSelectionMode = inSelectionMode,
-              onClick = {
-                if (inSelectionMode) onToggleSelection(clip.id) else onOpenClipDetails(clip.id)
-              },
-              onLongClick = { onToggleSelection(clip.id) },
-              onCopyClick = { onCopyClip(clip) },
-              onPinToggle = { onTogglePin(clip) },
-              onFavoriteToggle = { onToggleFavorite(clip) },
+              onClick = onOpenOrToggle,
+              onLongClick = onLong,
+              onCopyClick = onCopy,
+              onPinToggle = onPin,
+              onFavoriteToggle = onFav,
             )
           }
           if (remainingCount > 0) {

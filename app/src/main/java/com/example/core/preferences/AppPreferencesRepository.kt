@@ -53,12 +53,12 @@ data class UserSettings(
   val historyRetentionDays: Int = 30, // 0 = forever
   val autoSyncEnabled: Boolean = false,
   val autoSyncIntervalHours: Int = 6,
-  val lastDetectedClipHash: String = "",
   val storageSoftQuotaMb: Int = 50,
   val storageWarnThreshold1: Int = 70,
   val storageWarnThreshold2: Int = 85,
   val storageWarnThreshold3: Int = 95,
   val multiCopyTipDismissed: Boolean = false,
+  val quickCaptureNotificationEnabled: Boolean = false,
 )
 
 @Singleton
@@ -90,6 +90,7 @@ constructor(
     val STORAGE_WARN_2 = intPreferencesKey("storage_warn_2")
     val STORAGE_WARN_3 = intPreferencesKey("storage_warn_3")
     val MULTI_COPY_TIP_DISMISSED = booleanPreferencesKey("multi_copy_tip_dismissed")
+    val QUICK_CAPTURE_NOTIFICATION = booleanPreferencesKey("quick_capture_notification")
 
     val TELEGRAM_CONFIG_ENC = stringPreferencesKey("telegram_config_enc")
     val DISCORD_CONFIG_ENC = stringPreferencesKey("discord_config_enc")
@@ -117,12 +118,12 @@ constructor(
           historyRetentionDays = prefs[Keys.RETENTION_DAYS] ?: 30,
           autoSyncEnabled = prefs[Keys.AUTO_SYNC_ENABLED] ?: false,
           autoSyncIntervalHours = prefs[Keys.AUTO_SYNC_INTERVAL_HOURS] ?: 6,
-          lastDetectedClipHash = prefs[Keys.LAST_DETECTED_HASH] ?: "",
           storageSoftQuotaMb = prefs[Keys.STORAGE_SOFT_QUOTA_MB] ?: 50,
           storageWarnThreshold1 = prefs[Keys.STORAGE_WARN_1] ?: 70,
           storageWarnThreshold2 = prefs[Keys.STORAGE_WARN_2] ?: 85,
           storageWarnThreshold3 = prefs[Keys.STORAGE_WARN_3] ?: 95,
           multiCopyTipDismissed = prefs[Keys.MULTI_COPY_TIP_DISMISSED] ?: false,
+          quickCaptureNotificationEnabled = prefs[Keys.QUICK_CAPTURE_NOTIFICATION] ?: false,
         )
       }
       .distinctUntilChanged()
@@ -253,6 +254,9 @@ constructor(
     }
   }
 
+  suspend fun getLastDetectedClipHashOnce(): String =
+    context.smartClipboardDataStore.data.map { it[Keys.LAST_DETECTED_HASH] ?: "" }.first()
+
   suspend fun updateLastDetectedClipHash(hash: String) {
     context.smartClipboardDataStore.edit { it[Keys.LAST_DETECTED_HASH] = hash }
   }
@@ -263,6 +267,10 @@ constructor(
 
   suspend fun updateMultiCopyTipDismissed(dismissed: Boolean) {
     context.smartClipboardDataStore.edit { it[Keys.MULTI_COPY_TIP_DISMISSED] = dismissed }
+  }
+
+  suspend fun updateQuickCaptureNotificationEnabled(enabled: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.QUICK_CAPTURE_NOTIFICATION] = enabled }
   }
 
   suspend fun saveTelegramConfig(config: TelegramConfig) {

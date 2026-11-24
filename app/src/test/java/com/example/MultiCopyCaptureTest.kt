@@ -1,8 +1,11 @@
 package com.example
 
+import android.Manifest
+import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import org.robolectric.Shadows
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -12,6 +15,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.core.clipboard.CaptureOutcome
 import com.example.core.clipboard.ClipboardCaptureCoordinator
+import com.example.core.clipboard.QuickCaptureNotificationHelper
 import com.example.core.clipboard.SystemClipboardHelper
 import com.example.core.clipboard.SystemClipboardSnapshot
 import com.example.core.preferences.AppPreferencesRepository
@@ -231,7 +235,45 @@ class MultiCopyCaptureTest {
   }
 
   @Test
-  fun `settings quick tile button renders cleanly`() {
+  fun `home guide card quick capture notification button invokes toggle callback`() {
+    Shadows.shadowOf(context as Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+    var notifToggled: Boolean? = null
+
+    composeTestRule.setContent {
+      SmartClipboardTheme {
+        HomeScreen(
+          clips = emptyList(),
+          categories = emptyList(),
+          autoCapturedBanner = null,
+          onCaptureClipboardNow = {},
+          onUndoAutoCaptured = {},
+          onMarkBannerSensitive = {},
+          onDismissAutoCapturedBanner = {},
+          onAddNewClip = {},
+          onOpenClipDetails = {},
+          onCopyClip = {},
+          onTogglePin = {},
+          onToggleFavorite = {},
+          onOpenFavorites = {},
+          onOpenIntegrations = {},
+          onOpenTrash = {},
+          onOpenSettings = {},
+          onOpenBackupSync = {},
+          showMultiCopyGuide = true,
+          quickCaptureNotificationEnabled = false,
+          onToggleQuickCaptureNotification = { notifToggled = it },
+        )
+      }
+    }
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("home_toggle_notif_btn").assertIsDisplayed().performClick()
+    assertEquals(true, notifToggled)
+  }
+
+  @Test
+  fun `settings quick tile and notification switches render cleanly`() {
+    Shadows.shadowOf(context as Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+    var notifToggled: Boolean? = null
     composeTestRule.setContent {
       SmartClipboardTheme {
         SettingsScreen(
@@ -243,10 +285,23 @@ class MultiCopyCaptureTest {
           onRetentionDaysChange = {},
           onClearSystemClipboard = {},
           onWipeAllData = {},
+          onQuickCaptureNotificationToggle = { notifToggled = it },
         )
       }
     }
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("add_qs_tile_btn").performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithTag("quick_capture_notif_switch").performScrollTo().assertIsDisplayed().performClick()
+    assertEquals(true, notifToggled)
+  }
+
+  @Test
+  fun `quick capture notification preference persists and helper runs safely`() = runTest {
+    prefs.updateQuickCaptureNotificationEnabled(true)
+    prefs.updateLastDetectedClipHash("abc123")
+    assertEquals("abc123", prefs.getLastDetectedClipHashOnce())
+
+    QuickCaptureNotificationHelper.showOrCancel(context, enabled = true)
+    QuickCaptureNotificationHelper.showOrCancel(context, enabled = false)
   }
 }

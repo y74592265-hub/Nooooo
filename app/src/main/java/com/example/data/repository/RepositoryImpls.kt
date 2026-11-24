@@ -34,6 +34,7 @@ import com.example.domain.usecase.SearchFilter
 import com.example.domain.usecase.SearchSortOrder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -51,33 +52,52 @@ constructor(
 ) : ClipRepository {
 
   override fun observeActiveClips(): Flow<List<ClipItem>> =
-    clipDao.observeActiveClips().map { list -> list.map { it.toDomain() } }.flowOn(Dispatchers.Default)
+    clipDao
+      .observeActiveClips()
+      .distinctUntilChanged()
+      .map { list -> list.map { it.toDomain() } }
+      .flowOn(Dispatchers.Default)
 
   override fun observeActiveClipsPaged(limit: Int): Flow<List<ClipItem>> =
     clipDao
       .observeActiveClipsPaged(limit.coerceAtLeast(1))
+      .distinctUntilChanged()
       .map { list -> list.map { it.toDomain() } }
       .flowOn(Dispatchers.Default)
 
-  override fun observeTotalActiveCount(): Flow<Int> = clipDao.observeTotalActiveCount()
+  override fun observeTotalActiveCount(): Flow<Int> =
+    clipDao.observeTotalActiveCount().distinctUntilChanged()
 
   override fun observeFavoriteClips(): Flow<List<ClipItem>> =
-    clipDao.observeFavoriteClips().map { list -> list.map { it.toDomain() } }.flowOn(Dispatchers.Default)
+    clipDao
+      .observeFavoriteClips()
+      .distinctUntilChanged()
+      .map { list -> list.map { it.toDomain() } }
+      .flowOn(Dispatchers.Default)
 
   override fun observeTrashedClips(): Flow<List<ClipItem>> =
-    clipDao.observeTrashedClips().map { list -> list.map { it.toDomain() } }.flowOn(Dispatchers.Default)
+    clipDao
+      .observeTrashedClips()
+      .distinctUntilChanged()
+      .map { list -> list.map { it.toDomain() } }
+      .flowOn(Dispatchers.Default)
 
   override fun observeClipsByCategory(categoryId: Long): Flow<List<ClipItem>> =
-    clipDao.observeClipsByCategory(categoryId).map { list -> list.map { it.toDomain() } }.flowOn(Dispatchers.Default)
+    clipDao
+      .observeClipsByCategory(categoryId)
+      .distinctUntilChanged()
+      .map { list -> list.map { it.toDomain() } }
+      .flowOn(Dispatchers.Default)
 
   override fun observeClipsByCategoryPaged(categoryId: Long, limit: Int): Flow<List<ClipItem>> =
     clipDao
       .observeClipsByCategoryPaged(categoryId, limit.coerceAtLeast(1))
+      .distinctUntilChanged()
       .map { list -> list.map { it.toDomain() } }
       .flowOn(Dispatchers.Default)
 
   override fun observeClipById(id: Long): Flow<ClipItem?> =
-    clipDao.observeClipById(id).map { it?.toDomain() }.flowOn(Dispatchers.Default)
+    clipDao.observeClipById(id).distinctUntilChanged().map { it?.toDomain() }.flowOn(Dispatchers.Default)
 
   override suspend fun getClipById(id: Long): ClipItem? =
     withContext(Dispatchers.IO) { clipDao.getClipById(id)?.toDomain() }
@@ -615,6 +635,7 @@ class CategoryRepositoryImpl @Inject constructor(private val categoryDao: Catego
   override fun observeCategories(): Flow<List<Category>> =
     categoryDao
       .observeCategoriesWithCount()
+      .distinctUntilChanged()
       .map { rows ->
         rows.map {
           Category(

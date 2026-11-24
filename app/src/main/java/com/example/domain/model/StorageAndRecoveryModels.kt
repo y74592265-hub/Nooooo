@@ -1,5 +1,7 @@
 package com.example.domain.model
 
+import androidx.compose.runtime.Immutable
+
 enum class RecoveryMatchStatus {
   NEW_REMOTE,
   ALREADY_SYNCED,
@@ -71,6 +73,7 @@ enum class StorageThresholdLevel {
   CRITICAL_95,
 }
 
+@Immutable
 data class StorageCapacityStats(
   val totalClipsCount: Int = 0,
   val activeClipsCount: Int = 0,
@@ -91,6 +94,7 @@ data class StorageCapacityStats(
   val largestClips: List<ClipItem> = emptyList(),
 )
 
+@Immutable
 data class QueueSummary(
   val pendingCount: Int = 0,
   val uploadingCount: Int = 0,

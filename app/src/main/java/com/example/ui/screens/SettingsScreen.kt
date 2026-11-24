@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Arrangement
@@ -52,11 +53,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.core.clipboard.QuickCaptureNotificationHelper
 import com.example.core.clipboard.QuickTileInstaller
 import com.example.core.preferences.AppLanguage
 import com.example.core.preferences.ThemeMode
 import com.example.core.preferences.UserSettings
 import com.example.ui.components.VaultSectionCard
+import com.example.ui.components.rememberNotificationPermissionRequester
 import com.example.ui.theme.AppSpacing
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -71,6 +74,7 @@ fun SettingsScreen(
   onClearSystemClipboard: () -> Unit,
   onWipeAllData: () -> Unit,
   onInstantAutoSaveToggle: (Boolean) -> Unit = {},
+  onQuickCaptureNotificationToggle: (Boolean) -> Unit = {},
   onAutoDetectSensitiveToggle: (Boolean) -> Unit = {},
   onBlockSensitiveSyncToggle: (Boolean) -> Unit = {},
   onSkipAutoSaveSensitiveToggle: (Boolean) -> Unit = {},
@@ -81,6 +85,11 @@ fun SettingsScreen(
   modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
+  val requestNotificationPermission =
+    rememberNotificationPermissionRequester(
+      onGranted = { onQuickCaptureNotificationToggle(true) },
+      onDenied = { onShowMessage(context.getString(R.string.quick_notif_permission_denied)) },
+    )
   var showWipeConfirm by remember { mutableStateOf(false) }
   var excludedInput by remember { mutableStateOf(settings.excludedSourceAppsCsv) }
 
@@ -181,6 +190,25 @@ fun SettingsScreen(
           checked = settings.instantAutoSave,
           onCheckedChange = onInstantAutoSaveToggle,
           testTag = "instant_autosave_switch",
+        )
+
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_quick_notif_title),
+          subtitle = stringResource(R.string.settings_quick_notif_subtitle),
+          checked = settings.quickCaptureNotificationEnabled,
+          onCheckedChange = { enable ->
+            if (!enable) {
+              onQuickCaptureNotificationToggle(false)
+            } else if (
+              Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                !QuickCaptureNotificationHelper.hasNotificationPermission(context)
+            ) {
+              requestNotificationPermission()
+            } else {
+              onQuickCaptureNotificationToggle(true)
+            }
+          },
+          testTag = "quick_capture_notif_switch",
         )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

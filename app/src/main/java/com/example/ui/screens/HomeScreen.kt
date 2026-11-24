@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -51,12 +52,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.core.clipboard.QuickCaptureNotificationHelper
 import com.example.domain.model.Category
 import com.example.domain.model.ClipItem
 import com.example.domain.model.StorageCapacityStats
@@ -66,6 +69,7 @@ import com.example.ui.components.EmptyStateView
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.StorageCapacityBanner
 import com.example.ui.components.localizedCategoryName
+import com.example.ui.components.rememberNotificationPermissionRequester
 import com.example.ui.theme.AppSpacing
 import com.example.ui.theme.FavoriteGold
 import com.example.ui.viewmodel.AutoCapturedBannerState
@@ -94,11 +98,20 @@ fun HomeScreen(
   onOpenSettings: () -> Unit,
   onOpenBackupSync: () -> Unit,
   showMultiCopyGuide: Boolean = false,
+  quickCaptureNotificationEnabled: Boolean = false,
+  onToggleQuickCaptureNotification: (Boolean) -> Unit = {},
+  onShowMessage: (String) -> Unit = {},
   onAddQuickCaptureTile: () -> Unit = {},
   onOpenImeSettings: () -> Unit = {},
   onDismissMultiCopyGuide: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
+  val context = LocalContext.current
+  val requestNotificationPermission =
+    rememberNotificationPermissionRequester(
+      onGranted = { onToggleQuickCaptureNotification(true) },
+      onDenied = { onShowMessage(context.getString(R.string.quick_notif_permission_denied)) },
+    )
   val categoryMap = remember(categories) { categories.associateBy { it.id } }
   val pinnedClips = remember(clips) { clips.filter { it.isPinned } }
   val favoriteCount = remember(clips) { clips.count { it.isFavorite } }
@@ -261,6 +274,27 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
               ) {
                 OutlinedButton(
+                  onClick = {
+                    val enable = !quickCaptureNotificationEnabled
+                    if (!enable) {
+                      onToggleQuickCaptureNotification(false)
+                    } else if (
+                      Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        !QuickCaptureNotificationHelper.hasNotificationPermission(context)
+                    ) {
+                      requestNotificationPermission()
+                    } else {
+                      onToggleQuickCaptureNotification(true)
+                    }
+                  },
+                  modifier = Modifier.testTag("home_toggle_notif_btn"),
+                ) {
+                  Text(
+                    if (quickCaptureNotificationEnabled) stringResource(R.string.quick_notif_action)
+                    else stringResource(R.string.settings_quick_notif_title)
+                  )
+                }
+                OutlinedButton(
                   onClick = onAddQuickCaptureTile,
                   modifier = Modifier.testTag("home_add_qs_tile_btn"),
                 ) {
@@ -376,7 +410,7 @@ fun HomeScreen(
         }
         item {
           LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(pinnedClips, key = { "pin_${it.id}" }) { clip ->
+            items(pinnedClips, key = { "pin_${it.id}" }, contentType = { "pinned_card" }) { clip ->
               Surface(
                 onClick = { onOpenClipDetails(clip.id) },
                 shape = MaterialTheme.shapes.medium,
@@ -450,14 +484,18 @@ fun HomeScreen(
           )
         }
       } else {
-        items(recentClips, key = { it.id }) { clip ->
+        items(recentClips, key = { it.id }, contentType = { "clip_card" }) { clip ->
+          val onOpen = remember(clip.id) { { onOpenClipDetails(clip.id) } }
+          val onCopy = remember(clip) { { onCopyClip(clip) } }
+          val onPin = remember(clip) { { onTogglePin(clip) } }
+          val onFav = remember(clip) { { onToggleFavorite(clip) } }
           ClipCard(
             clip = clip,
             category = categoryMap[clip.categoryId],
-            onClick = { onOpenClipDetails(clip.id) },
-            onCopyClick = { onCopyClip(clip) },
-            onPinToggle = { onTogglePin(clip) },
-            onFavoriteToggle = { onToggleFavorite(clip) },
+            onClick = onOpen,
+            onCopyClick = onCopy,
+            onPinToggle = onPin,
+            onFavoriteToggle = onFav,
           )
         }
       }

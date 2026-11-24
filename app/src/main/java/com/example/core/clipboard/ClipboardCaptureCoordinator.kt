@@ -71,13 +71,14 @@ constructor(
         return@withLock CaptureOutcome.EmptyOrDisabled
       }
 
+      val lastHash = prefs.getLastDetectedClipHashOnce()
       val snapshot = overrideSnapshot ?: clipboardHelper.readCurrentClipboardSnapshot()
         ?: return@withLock CaptureOutcome.EmptyOrDisabled
       captureSnapshotLocked(
         snapshot = snapshot,
         source = source,
         foregroundPackageHint = foregroundPackageHint,
-        lastDetectedHash = settings.lastDetectedClipHash,
+        lastDetectedHash = lastHash,
         excludedSourceAppsCsv = settings.excludedSourceAppsCsv,
         autoDetectSensitivePatterns = settings.autoDetectSensitivePatterns,
         skipAutoSaveSensitive = settings.skipAutoSaveSensitive,
@@ -102,7 +103,7 @@ constructor(
         return@withLock listOf(CaptureOutcome.EmptyOrDisabled)
       }
 
-      var currentLastHash = settings.lastDetectedClipHash
+      var currentLastHash = prefs.getLastDetectedClipHashOnce()
       val outcomes = ArrayList<CaptureOutcome>(snapshots.size)
       for (snapshot in snapshots) {
         val outcome =

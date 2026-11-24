@@ -428,5 +428,13 @@
     <string name="multicopy_tile_already_added">“Capture Clip” tile is already in Quick Settings</string>
     <string name="multicopy_tile_manual_hint">Swipe down Quick Settings twice → Edit (pencil) → drag “Capture Clip” to active tiles.</string>
     <string name="multicopy_dismiss_btn">Got it</string>
-    <string name="settings_multicopy_note">Android 10+ limits background clipboard access to the focused app or active keyboard, so copying twice outside the app overwrites the first item in system memory. Add the Quick Settings Tile below or use “Quick Save Clip” when selecting text to save every copy instantly.</string>
+    <string name="settings_multicopy_note">Android 10+ limits background clipboard access to the focused app or active keyboard, so copying twice outside the app overwrites the first item in system memory. Use the Quick Capture Notification, Quick Settings Tile, or “Quick Save Clip” text action to save every copy instantly.</string>
+    <string name="settings_quick_notif_title">Quick Capture Notification</string>
+    <string name="settings_quick_notif_subtitle">Keep a silent notification with a 1-tap “Save Clip” button so you can save multiple copies without leaving other apps</string>
+    <string name="quick_notif_channel_name">Quick Clipboard Capture</string>
+    <string name="quick_notif_channel_desc">Silent shortcut notification for one-tap clipboard saving from any app</string>
+    <string name="quick_notif_title">Smart Clipboard Ready</string>
+    <string name="quick_notif_body">After copying text in any app, tap “Save Clip” here to store it without switching apps.</string>
+    <string name="quick_notif_action">Save Clip</string>
+    <string name="quick_notif_permission_denied">Notification permission denied — enable it in App Settings to use the Quick Capture Notification.</string>
 </resources>

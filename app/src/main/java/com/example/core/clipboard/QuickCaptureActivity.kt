@@ -7,6 +7,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
@@ -23,18 +25,21 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Translucent, no-history capture activity invoked by the Quick Settings Tile or
- * Android's text-selection menu ("Quick Save Clip").
+ * Translucent, no-history capture activity invoked by the Quick Capture Notification,
+ * Quick Settings Tile, or Android's text-selection menu ("Quick Save Clip").
  *
- * Acquires brief window focus on Android 10+ to read ClipboardManager without
- * navigating the user away from their current app, saves the clip(s), shows a
- * brief Toast, and exits immediately.
+ * Attaches a 1dp focusable transparent anchor View so OEM WindowManager skins reliably grant
+ * window focus after Quick Settings / Notification shade collapse, retries briefly for
+ * ClipboardService focus token propagation on Android 10–15, saves all snapshots, shows a
+ * localized Toast, and exits immediately without navigating away from the user's current app.
  */
 @AndroidEntryPoint
 class QuickCaptureActivity : ComponentActivity() {
 
   companion object {
     const val ACTION_CAPTURE_CLIPBOARD = "com.example.action.QUICK_CAPTURE_CLIPBOARD"
+    private const val FALLBACK_FOCUS_TIMEOUT_MS = 950L
+    private val RETRY_DELAYS_MS = longArrayOf(60L, 100L, 140L)
   }
 
   @Inject lateinit var captureCoordinator: ClipboardCaptureCoordinator
@@ -47,16 +52,33 @@ class QuickCaptureActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-      overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, 0, 0)
-    } else {
-      @Suppress("DEPRECATION")
-      overridePendingTransition(0, 0)
-    }
+    disableTransitionAnimations(isOpen = true)
 
+    // Attach a minimal focusable View so OEM skins dispatch onWindowFocusChanged(true) cleanly
+    val focusAnchor =
+      View(this).apply {
+        layoutParams = ViewGroup.LayoutParams(1, 1)
+        isFocusable = true
+        isFocusableInTouchMode = true
+      }
+    setContentView(focusAnchor)
+    focusAnchor.requestFocus()
+
+    handleIncomingIntent(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    fallbackRunnable?.let { mainHandler.removeCallbacks(it) }
+    startedCapture.set(false)
+    handleIncomingIntent(intent)
+  }
+
+  private fun handleIncomingIntent(targetIntent: Intent?) {
     val incomingProcessText =
-      if (intent?.action == Intent.ACTION_PROCESS_TEXT) {
-        intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+      if (targetIntent?.action == Intent.ACTION_PROCESS_TEXT) {
+        targetIntent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
       } else {
         null
       }
@@ -75,20 +97,25 @@ class QuickCaptureActivity : ComponentActivity() {
       return
     }
 
+    if (hasWindowFocus() && startedCapture.compareAndSet(false, true)) {
+      runClipboardCaptureWithRetry()
+      return
+    }
+
     val fallback = Runnable {
       if (startedCapture.compareAndSet(false, true)) {
-        runClipboardCapture(retryDelayMs = 80L)
+        runClipboardCaptureWithRetry()
       }
     }
     fallbackRunnable = fallback
-    mainHandler.postDelayed(fallback, 280L)
+    mainHandler.postDelayed(fallback, FALLBACK_FOCUS_TIMEOUT_MS)
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
     if (hasFocus && startedCapture.compareAndSet(false, true)) {
       fallbackRunnable?.let { mainHandler.removeCallbacks(it) }
-      runClipboardCapture(retryDelayMs = 90L)
+      runClipboardCaptureWithRetry()
     }
   }
 
@@ -97,12 +124,15 @@ class QuickCaptureActivity : ComponentActivity() {
     super.onDestroy()
   }
 
-  private fun runClipboardCapture(retryDelayMs: Long) {
+  private fun runClipboardCaptureWithRetry() {
     lifecycleScope.launch {
       var snapshots = clipboardHelper.readAllClipboardSnapshots()
-      if (snapshots.isEmpty() && retryDelayMs > 0L) {
-        delay(retryDelayMs)
-        snapshots = clipboardHelper.readAllClipboardSnapshots()
+      if (snapshots.isEmpty()) {
+        for (waitMs in RETRY_DELAYS_MS) {
+          delay(waitMs)
+          snapshots = clipboardHelper.readAllClipboardSnapshots()
+          if (snapshots.isNotEmpty()) break
+        }
       }
       val outcomes =
         captureCoordinator.captureAllFromSystemClipboard(
@@ -151,12 +181,20 @@ class QuickCaptureActivity : ComponentActivity() {
   private fun finishSilently() {
     if (!isFinishing) {
       finish()
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
-      } else {
-        @Suppress("DEPRECATION")
-        overridePendingTransition(0, 0)
-      }
+      disableTransitionAnimations(isOpen = false)
+    }
+  }
+
+  private fun disableTransitionAnimations(isOpen: Boolean) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+      overrideActivityTransition(
+        if (isOpen) OVERRIDE_TRANSITION_OPEN else OVERRIDE_TRANSITION_CLOSE,
+        0,
+        0,
+      )
+    } else {
+      @Suppress("DEPRECATION")
+      overridePendingTransition(0, 0)
     }
   }
 

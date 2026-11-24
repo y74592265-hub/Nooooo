@@ -1,9 +1,18 @@
 package com.example.ui.components
 
+import android.Manifest
 import android.content.Context
+import android.content.ContextWrapper
+import android.os.Build
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -21,10 +30,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -113,30 +125,28 @@ fun StatusPill(
   contentColor: Color,
   modifier: Modifier = Modifier,
 ) {
-  Surface(
-    modifier = modifier,
-    shape = RoundedCornerShape(999.dp),
-    color = containerColor,
+  Row(
+    modifier =
+      modifier
+        .clip(RoundedCornerShape(999.dp))
+        .background(containerColor)
+        .padding(horizontal = 10.dp, vertical = 4.dp),
+    verticalAlignment = Alignment.CenterVertically,
   ) {
-    Row(
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Icon(
-        imageVector = icon,
-        contentDescription = null,
-        tint = contentColor,
-        modifier = Modifier.size(14.dp),
-      )
-      Spacer(modifier = Modifier.width(5.dp))
-      Text(
-        text = label,
-        style = MaterialTheme.typography.labelMedium,
-        color = contentColor,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-    }
+    Icon(
+      imageVector = icon,
+      contentDescription = null,
+      tint = contentColor,
+      modifier = Modifier.size(14.dp),
+    )
+    Spacer(modifier = Modifier.width(5.dp))
+    Text(
+      text = label,
+      style = MaterialTheme.typography.labelMedium,
+      color = contentColor,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+    )
   }
 }
 
@@ -221,12 +231,13 @@ private fun formatShortDate(timestamp: Long): String {
 
 @Composable
 fun localizedRelativeTime(timestamp: Long): String {
-  val diff = (System.currentTimeMillis() - timestamp).coerceAtLeast(0L)
+  val now = remember(timestamp) { System.currentTimeMillis() }
+  val diff = (now - timestamp).coerceAtLeast(0L)
   return when {
     diff < 60_000L -> stringResource(R.string.time_now)
     diff < 3_600_000L -> stringResource(R.string.time_minutes_ago, (diff / 60_000L).toInt())
     diff < 86_400_000L -> stringResource(R.string.time_hours_ago, (diff / 3_600_000L).toInt())
-    else -> formatShortDate(timestamp)
+    else -> remember(timestamp) { formatShortDate(timestamp) }
   }
 }
 
@@ -300,6 +311,40 @@ fun formatBytesHuman(bytes: Long): String {
     b < 1024L * 1024L -> String.format(Locale.US, "%.1f KB", b / 1024.0)
     b < 1024L * 1024L * 1024L -> String.format(Locale.US, "%.2f MB", b / (1024.0 * 1024.0))
     else -> String.format(Locale.US, "%.2f GB", b / (1024.0 * 1024.0 * 1024.0))
+  }
+}
+
+@Composable
+fun rememberNotificationPermissionRequester(
+  onGranted: () -> Unit,
+  onDenied: () -> Unit,
+): () -> Unit {
+  val context = LocalContext.current
+  val explicitOwner = LocalActivityResultRegistryOwner.current
+  val hasRegistryOwner =
+    explicitOwner != null ||
+      generateSequence(context) { (it as? ContextWrapper)?.baseContext }
+        .any { it is ActivityResultRegistryOwner }
+
+  if (hasRegistryOwner) {
+    val launcher =
+      rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) onGranted() else onDenied()
+      }
+    return {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+      } else {
+        onGranted()
+      }
+    }
+  }
+  return {
+    if (com.example.core.clipboard.QuickCaptureNotificationHelper.hasNotificationPermission(context)) {
+      onGranted()
+    } else {
+      onDenied()
+    }
   }
 }
 

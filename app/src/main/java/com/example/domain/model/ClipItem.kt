@@ -1,5 +1,6 @@
 package com.example.domain.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -33,6 +34,7 @@ enum class ClipSyncState {
   CONFLICT,
 }
 
+@Immutable
 data class ClipItem(
   val id: Long = 0L,
   val title: String = "",

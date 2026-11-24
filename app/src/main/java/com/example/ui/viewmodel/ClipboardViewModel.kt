@@ -31,6 +31,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -72,7 +73,7 @@ constructor(
 ) : ViewModel() {
 
   companion object {
-    const val PAGE_INCREMENT = 50
+    const val PAGE_INCREMENT = 25
   }
 
   private val _storageStats = MutableStateFlow<StorageCapacityStats?>(null)
@@ -82,13 +83,14 @@ constructor(
   val pagedLimit: StateFlow<Int> = _pagedLimit.asStateFlow()
 
   init {
-    viewModelScope.launch {
+    viewModelScope.launch(Dispatchers.IO) {
       categoryRepository.ensureDefaultCategories()
       val settings = prefs.userSettings.first()
       if (settings.historyRetentionDays > 0) {
         clipRepository.purgeExpiredHistory(settings.historyRetentionDays)
       }
-      refreshStorageStats()
+      delay(250L)
+      _storageStats.value = runCatching { storageCapacityUseCase.computeStats() }.getOrNull()
     }
   }
 
@@ -168,8 +170,14 @@ constructor(
    */
   fun onAppWindowFocused() {
     viewModelScope.launch {
-      val outcomes =
+      var outcomes =
         captureCoordinator.captureAllFromSystemClipboard(source = ClipSource.CLIPBOARD)
+      if (outcomes.all { it is CaptureOutcome.EmptyOrDisabled }) {
+        // Some OEM Android 12–15 skins dispatch onWindowFocusChanged slightly before ClipboardService updates focus token
+        delay(140L)
+        outcomes =
+          captureCoordinator.captureAllFromSystemClipboard(source = ClipSource.CLIPBOARD)
+      }
       val savedList = outcomes.filterIsInstance<CaptureOutcome.Saved>()
       if (savedList.isNotEmpty()) {
         val latest = savedList.last()

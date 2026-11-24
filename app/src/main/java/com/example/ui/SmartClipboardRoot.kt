@@ -139,9 +139,7 @@ fun SmartClipboardRoot(
   lockErrorMessage: String?,
   onRequestUnlock: () -> Unit,
   clipboardViewModel: ClipboardViewModel = hiltViewModel(),
-  syncViewModel: SyncIntegrationsViewModel = hiltViewModel(),
   settingsViewModel: SettingsViewModel = hiltViewModel(),
-  recoveryViewModel: RecoveryViewModel = hiltViewModel(),
 ) {
   val settings by settingsViewModel.userSettings.collectAsStateWithLifecycle()
   val baseContext = LocalContext.current
@@ -237,17 +235,7 @@ fun SmartClipboardRoot(
         }
       }
       LaunchedEffect(Unit) {
-        syncViewModel.statusMessages.collect {
-          snackbarHostState.showSnackbar(it.resolve(activeLocalizedContext))
-        }
-      }
-      LaunchedEffect(Unit) {
         settingsViewModel.events.collect {
-          snackbarHostState.showSnackbar(it.resolve(activeLocalizedContext))
-        }
-      }
-      LaunchedEffect(Unit) {
-        recoveryViewModel.statusMessages.collect {
           snackbarHostState.showSnackbar(it.resolve(activeLocalizedContext))
         }
       }
@@ -540,6 +528,10 @@ fun SmartClipboardRoot(
                     onOpenSettings = { navController.navigate(SettingsRoute) },
                     onOpenBackupSync = { navigateTopLevel(BackupSyncRoute) },
                     showMultiCopyGuide = !settings.multiCopyTipDismissed,
+                    quickCaptureNotificationEnabled = settings.quickCaptureNotificationEnabled,
+                    onToggleQuickCaptureNotification =
+                      settingsViewModel::setQuickCaptureNotificationEnabled,
+                    onShowMessage = settingsViewModel::emitMessage,
                     onAddQuickCaptureTile = {
                       QuickTileInstaller.requestAddCaptureTile(activeLocalizedContext) { msg ->
                         settingsViewModel.emitMessage(msg)
@@ -638,6 +630,12 @@ fun SmartClipboardRoot(
                 }
 
                 composable<IntegrationsRoute> {
+                  val syncViewModel: SyncIntegrationsViewModel = hiltViewModel()
+                  LaunchedEffect(syncViewModel) {
+                    syncViewModel.statusMessages.collect {
+                      snackbarHostState.showSnackbar(it.resolve(activeLocalizedContext))
+                    }
+                  }
                   val telegramConfig by syncViewModel.telegramConfig.collectAsStateWithLifecycle()
                   val discordConfig by syncViewModel.discordConfig.collectAsStateWithLifecycle()
                   val discordBotName by
@@ -659,6 +657,12 @@ fun SmartClipboardRoot(
                 }
 
                 composable<BackupSyncRoute> {
+                  val syncViewModel: SyncIntegrationsViewModel = hiltViewModel()
+                  LaunchedEffect(syncViewModel) {
+                    syncViewModel.statusMessages.collect {
+                      snackbarHostState.showSnackbar(it.resolve(activeLocalizedContext))
+                    }
+                  }
                   val telegramConfig by syncViewModel.telegramConfig.collectAsStateWithLifecycle()
                   val discordConfig by syncViewModel.discordConfig.collectAsStateWithLifecycle()
                   val driveConfig by syncViewModel.googleDriveConfig.collectAsStateWithLifecycle()
@@ -687,6 +691,12 @@ fun SmartClipboardRoot(
                 }
 
                 composable<CloudRecoveryRoute> {
+                  val recoveryViewModel: RecoveryViewModel = hiltViewModel()
+                  LaunchedEffect(recoveryViewModel) {
+                    recoveryViewModel.statusMessages.collect {
+                      snackbarHostState.showSnackbar(it.resolve(activeLocalizedContext))
+                    }
+                  }
                   val healthSummaries by recoveryViewModel.healthSummaries.collectAsStateWithLifecycle()
                   val scanResult by recoveryViewModel.scanResult.collectAsStateWithLifecycle()
                   val selectedRemoteIds by
@@ -741,6 +751,8 @@ fun SmartClipboardRoot(
                     onClearSystemClipboard = settingsViewModel::clearSystemClipboard,
                     onWipeAllData = settingsViewModel::wipeAllData,
                     onInstantAutoSaveToggle = settingsViewModel::setInstantAutoSave,
+                    onQuickCaptureNotificationToggle =
+                      settingsViewModel::setQuickCaptureNotificationEnabled,
                     onAutoDetectSensitiveToggle =
                       settingsViewModel::setAutoDetectSensitivePatterns,
                     onBlockSensitiveSyncToggle = settingsViewModel::setBlockSensitiveCloudSync,
@@ -817,7 +829,9 @@ fun SmartClipboardRoot(
 private fun applyLocaleContext(base: Context, language: AppLanguage): Context {
   if (language == AppLanguage.SYSTEM) return base
   val locale = Locale.forLanguageTag(language.tag)
-  Locale.setDefault(locale)
+  if (Locale.getDefault() != locale) {
+    Locale.setDefault(locale)
+  }
   val config = Configuration(base.resources.configuration)
   config.setLocale(locale)
   config.setLayoutDirection(locale)

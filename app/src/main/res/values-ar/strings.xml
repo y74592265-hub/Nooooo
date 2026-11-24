@@ -428,5 +428,13 @@
     <string name="multicopy_tile_already_added">مربع «التقاط الحافظة» مضاف مسبقًا</string>
     <string name="multicopy_tile_manual_hint">اسحب شريط الإشعارات مرتين ← تعديل (القلم) ← اسحب مربع «التقاط الحافظة» للأعلى.</string>
     <string name="multicopy_dismiss_btn">فهمت</string>
-    <string name="settings_multicopy_note">يمنع نظام أندرويد 10+ قراءة الحافظة في الخلفية ويستبدل النص السابق عند النسخ مرتين قبل فتح التطبيق. أضف مربع «التقاط الحافظة» في الإعدادات السريعة أو استخدم «حفظ سريع بالحافظة» عند تحديد النص لحفظ كل نسخة فورًا.</string>
+    <string name="settings_multicopy_note">يمنع نظام أندرويد 10+ قراءة الحافظة في الخلفية ويستبدل النص السابق عند النسخ مرتين قبل فتح التطبيق. فعّل «إشعار الالتقاط السريع» أو مربع الإعدادات السريعة أو «حفظ سريع بالحافظة» لحفظ كل نسخة فورًا دون مغادرة تطبيقك.</string>
+    <string name="settings_quick_notif_title">إشعار الالتقاط السريع</string>
+    <string name="settings_quick_notif_subtitle">إبقاء إشعار صامت بزر «حفظ المنسوخ» لحفظ أكثر من نص متتالي بنقرة واحدة من داخل أي تطبيق</string>
+    <string name="quick_notif_channel_name">الالتقاط السريع للحافظة</string>
+    <string name="quick_notif_channel_desc">إشعار صامت يتيح حفظ النص المنسوخ بنقرة واحدة من أي تطبيق</string>
+    <string name="quick_notif_title">الحافظة الذكية جاهزة للالتقاط</string>
+    <string name="quick_notif_body">بعد نسخ أي نص في تطبيق آخر، اضغط «حفظ المنسوخ» هنا لحفظه فورًا دون مغادرة تطبيقك.</string>
+    <string name="quick_notif_action">حفظ المنسوخ</string>
+    <string name="quick_notif_permission_denied">تم رفض إذن الإشعارات — فعّله من إعدادات التطبيق لاستخدام إشعار الالتقاط السريع.</string>
 </resources>

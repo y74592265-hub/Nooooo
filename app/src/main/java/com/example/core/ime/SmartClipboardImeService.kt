@@ -90,6 +90,18 @@ class SmartClipboardImeService : InputMethodService() {
     loadRecentClips()
   }
 
+  override fun onWindowShown() {
+    super.onWindowShown()
+    isInputBarVisible = true
+    val snapshots = entryPoint.clipboardHelper().readAllClipboardSnapshots()
+    captureSnapshots(
+      snapshots = snapshots,
+      packageHint = currentInputEditorInfo?.packageName,
+      toastIfHidden = false,
+    )
+    loadRecentClips()
+  }
+
   override fun onFinishInputView(finishingInput: Boolean) {
     isInputBarVisible = false
     super.onFinishInputView(finishingInput)
