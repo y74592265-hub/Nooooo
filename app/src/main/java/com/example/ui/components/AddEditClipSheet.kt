@@ -40,7 +40,10 @@ import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.AssistChip
 import com.example.R
+import com.example.domain.intelligence.ClipTemplateEngine
 import com.example.domain.model.Category
 import com.example.domain.model.CategoryDefaults
 import com.example.domain.model.ClipContentType
@@ -136,6 +139,31 @@ fun AddEditClipSheet(
         shape = MaterialTheme.shapes.small,
         modifier = Modifier.fillMaxWidth().testTag("clip_content_input"),
       )
+
+      if (!isSensitive) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Text(
+            text = stringResource(R.string.template_tokens_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            ClipTemplateEngine.AVAILABLE_TOKENS.forEachIndexed { idx, token ->
+              AssistChip(
+                onClick = {
+                  val spacer = if (content.isNotEmpty() && !content.last().isWhitespace()) " " else ""
+                  content = "$content$spacer$token"
+                },
+                label = { Text("+ $token", style = MaterialTheme.typography.labelMedium) },
+                modifier = Modifier.testTag("insert_token_$idx"),
+              )
+            }
+          }
+        }
+      }
 
       Text(
         text = stringResource(R.string.label_category),

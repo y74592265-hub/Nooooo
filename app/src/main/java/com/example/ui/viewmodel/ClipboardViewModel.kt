@@ -9,6 +9,8 @@ import com.example.core.clipboard.SystemClipboardHelper
 import com.example.core.preferences.AppPreferencesRepository
 import com.example.core.security.KeystoreCryptoManager
 import com.example.core.sync.SyncEngine
+import com.example.domain.intelligence.ClipTemplateEngine
+import com.example.domain.intelligence.UsageLearningEngine
 import com.example.domain.model.Category
 import com.example.domain.model.ClipContentType
 import com.example.domain.model.ClipItem
@@ -70,6 +72,7 @@ constructor(
   private val cryptoManager: KeystoreCryptoManager,
   private val prefs: AppPreferencesRepository,
   private val syncEngine: SyncEngine,
+  private val usageLearningEngine: UsageLearningEngine,
 ) : ViewModel() {
 
   companion object {
@@ -252,10 +255,14 @@ constructor(
           captureCoordinator.enqueueClipForSync(result.clipId)
         }
         refreshStorageStats()
+        clipboardHelper.refreshWidgets()
         _snackbarEvents.emit(
-          UiText.Resource(
-            if (result.wasDuplicateMerged) R.string.msg_clip_merged else R.string.msg_clip_saved
-          )
+          when {
+            result.wasLineageVersioned ->
+              UiText.Resource(R.string.msg_clip_version_stacked, listOf(result.newVersionNumber))
+            result.wasDuplicateMerged -> UiText.Resource(R.string.msg_clip_merged)
+            else -> UiText.Resource(R.string.msg_clip_saved)
+          }
         )
       }
     }
@@ -268,20 +275,34 @@ constructor(
         captureCoordinator.enqueueClipForSync(clip.id)
       }
       refreshStorageStats()
+      clipboardHelper.refreshWidgets()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_clip_updated))
     }
   }
 
   fun copyClip(clip: ClipItem) {
     viewModelScope.launch {
-      prefs.updateLastDetectedClipHash(clip.contentHash)
-      clipboardHelper.copyToClipboard(clip.title.ifBlank { "Clip" }, clip.content, clip.isSensitive)
-      _snackbarEvents.emit(UiText.Resource(R.string.action_copied))
+      val hasTemplate = !clip.isSensitive && ClipTemplateEngine.hasTemplateTokens(clip.content)
+      val payload =
+        if (hasTemplate) ClipTemplateEngine.expand(clip.content)
+        else clip.content
+      val payloadHash =
+        if (hasTemplate) cryptoManager.sha256(payload) else clip.contentHash
+      prefs.updateLastDetectedClipHash(payloadHash)
+      clipboardHelper.copyToClipboard(clip.title.ifBlank { "Clip" }, payload, clip.isSensitive)
+      usageLearningEngine.recordUsage(clipId = clip.id, isSensitive = clip.isSensitive)
+      clipboardHelper.refreshWidgets()
+      _snackbarEvents.emit(
+        UiText.Resource(if (hasTemplate) R.string.msg_template_copied else R.string.action_copied)
+      )
     }
   }
 
   fun togglePin(clip: ClipItem) {
-    viewModelScope.launch { clipRepository.setPinned(clip.id, !clip.isPinned) }
+    viewModelScope.launch {
+      clipRepository.setPinned(clip.id, !clip.isPinned)
+      clipboardHelper.refreshWidgets()
+    }
   }
 
   fun toggleFavorite(clip: ClipItem) {
@@ -293,6 +314,7 @@ constructor(
       clipRepository.moveToTrash(ids)
       _selectedClipIds.value = emptySet()
       refreshStorageStats()
+      clipboardHelper.refreshWidgets()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_moved_to_trash, listOf(ids.size)))
     }
   }
@@ -310,6 +332,7 @@ constructor(
       allowed.forEach { syncEngine.enqueueDeleteForClip(it) }
       clipRepository.moveToTrash(allowed.map { it.id })
       refreshStorageStats()
+      clipboardHelper.refreshWidgets()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_moved_to_trash, listOf(allowed.size)))
     }
   }
@@ -318,6 +341,7 @@ constructor(
     viewModelScope.launch {
       clipRepository.restoreFromTrash(ids)
       refreshStorageStats()
+      clipboardHelper.refreshWidgets()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_restored_items, listOf(ids.size)))
     }
   }
@@ -329,6 +353,7 @@ constructor(
       }
       clipRepository.deleteForever(ids)
       refreshStorageStats()
+      clipboardHelper.refreshWidgets()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_deleted_forever, listOf(ids.size)))
     }
   }
@@ -337,6 +362,7 @@ constructor(
     viewModelScope.launch {
       clipRepository.emptyTrash()
       refreshStorageStats()
+      clipboardHelper.refreshWidgets()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_trash_emptied))
     }
   }
@@ -363,6 +389,55 @@ constructor(
       clipRepository.moveClipsToCategory(ids, categoryId)
       _selectedClipIds.value = emptySet()
       _snackbarEvents.emit(UiText.Resource(R.string.msg_moved_items, listOf(ids.size)))
+    }
+  }
+
+  fun mergeSelectedClips(
+    separator: String,
+    deleteOriginals: Boolean,
+    mergedTitle: String,
+  ) {
+    val ids = _selectedClipIds.value.toList()
+    if (ids.size < 2) return
+    viewModelScope.launch {
+      val selectedClips =
+        ids
+          .mapNotNull { clipRepository.getClipById(it) }
+          .filter { !it.isTrashed && !it.isSensitive }
+          .sortedWith(compareBy<ClipItem> { it.createdAt }.thenBy { it.id })
+
+      if (selectedClips.size < 2) {
+        _snackbarEvents.emit(UiText.Resource(R.string.msg_merge_need_two_nonsensitive))
+        return@launch
+      }
+
+      val combinedContent = selectedClips.joinToString(separator) { it.content.trim() }
+      val mergedTags = selectedClips.flatMap { it.tags }.distinct().take(6)
+      val result =
+        saveClipUseCase(
+          title = mergedTitle,
+          content = combinedContent,
+          contentType = null,
+          categoryId = selectedClips.first().categoryId,
+          tags = mergedTags,
+          isSensitive = false,
+          source = ClipSource.MANUAL,
+          syncStatus = ClipSyncState.LOCAL_ONLY,
+        )
+      if (result != null) {
+        prefs.updateLastDetectedClipHash(cryptoManager.sha256(combinedContent))
+        captureCoordinator.enqueueClipForSync(result.clipId)
+        if (deleteOriginals) {
+          val victimsToTrash = selectedClips.map { it.id }.filter { it != result.clipId }
+          if (victimsToTrash.isNotEmpty()) {
+            clipRepository.moveToTrash(victimsToTrash)
+          }
+        }
+        _selectedClipIds.value = emptySet()
+        refreshStorageStats()
+        clipboardHelper.refreshWidgets()
+        _snackbarEvents.emit(UiText.Resource(R.string.msg_clips_merged, listOf(selectedClips.size)))
+      }
     }
   }
 

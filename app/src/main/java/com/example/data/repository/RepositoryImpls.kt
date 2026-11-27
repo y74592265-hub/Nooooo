@@ -11,6 +11,9 @@ import com.example.data.local.SyncLogDao
 import com.example.data.local.SyncLogEntity
 import com.example.data.local.SyncQueueDao
 import com.example.data.local.SyncQueueEntity
+import com.example.domain.intelligence.ArabicTextNormalizer
+import com.example.domain.lineage.ClipLineageEngine
+import com.example.domain.lineage.SimHash64
 import com.example.domain.model.Category
 import com.example.domain.model.CategoryDefaults
 import com.example.domain.model.ClipContentType
@@ -149,6 +152,30 @@ constructor(
               emptyList()
             }
 
+          // Also support Arabic orthography variants (أ/إ/آ->ا, ة->ه, ى->ي, tashkeel) & camelCase
+          val normalizedFallback =
+            if (ftsMatches.size < limit) {
+              clipDao
+                .filterActiveClipsIndexed(
+                  categoryId = filter.categoryId,
+                  contentType = filter.contentType,
+                  minTimestamp = minTimestamp,
+                  favoritesOnly = favFlag,
+                  limit = limit,
+                )
+                .asSequence()
+                .filter { !it.isSensitive }
+                .map { it.toDomain() }
+                .filter { clip ->
+                  ArabicTextNormalizer.normalizedContains(clip.title, rawQuery) ||
+                    ArabicTextNormalizer.normalizedContains(clip.content, rawQuery) ||
+                    clip.tags.any { ArabicTextNormalizer.normalizedContains(it, rawQuery) }
+                }
+                .toList()
+            } else {
+              emptyList()
+            }
+
           // Sensitive clips store encrypted text in DB; check decrypted sensitive subset separately in memory
           val sensitiveMatches =
             clipDao
@@ -160,17 +187,21 @@ constructor(
               )
               .map { it.toDomain() }
               .filter { clip ->
-                clip.title.contains(rawQuery, ignoreCase = true) ||
-                  clip.content.contains(rawQuery, ignoreCase = true) ||
-                  clip.tags.any { it.contains(rawQuery, ignoreCase = true) }
+                ArabicTextNormalizer.normalizedContains(clip.title, rawQuery) ||
+                  ArabicTextNormalizer.normalizedContains(clip.content, rawQuery) ||
+                  clip.tags.any { ArabicTextNormalizer.normalizedContains(it, rawQuery) }
               }
 
-          val seenIds = HashSet<Long>(ftsMatches.size + sensitiveMatches.size)
-          val merged = ArrayList<ClipItem>(ftsMatches.size + sensitiveMatches.size)
+          val seenIds =
+            HashSet<Long>(ftsMatches.size + normalizedFallback.size + sensitiveMatches.size)
+          val merged =
+            ArrayList<ClipItem>(ftsMatches.size + normalizedFallback.size + sensitiveMatches.size)
           for (e in ftsMatches) {
             val domain = e.toDomain()
-            // Verify substring match or token match cleanly for partial infix hits
             if (seenIds.add(domain.id)) merged.add(domain)
+          }
+          for (n in normalizedFallback) {
+            if (seenIds.add(n.id)) merged.add(n)
           }
           for (s in sensitiveMatches) {
             if (seenIds.add(s.id)) merged.add(s)
@@ -209,9 +240,9 @@ constructor(
           items.sortedWith(
             compareByDescending<ClipItem> {
               var score = 0
-              if (it.title.contains(query, ignoreCase = true)) score += 60
-              if (it.tags.any { t -> t.contains(query, ignoreCase = true) }) score += 40
-              if (it.content.contains(query, ignoreCase = true)) score += 20
+              if (ArabicTextNormalizer.normalizedContains(it.title, query)) score += 60
+              if (it.tags.any { t -> ArabicTextNormalizer.normalizedContains(t, query) }) score += 40
+              if (ArabicTextNormalizer.normalizedContains(it.content, query)) score += 20
               if (it.isPinned) score += 10
               score
             }
@@ -311,6 +342,13 @@ constructor(
             else -> ClipSyncState.LOCAL_ONLY
           }
 
+      val computedSimHash =
+        if (!isSensitive && resolvedType != ClipContentType.LINK && trimmed.length >= ClipLineageEngine.MIN_ELIGIBLE_CHARS) {
+          SimHash64.compute(trimmed)
+        } else {
+          0L
+        }
+
       val entity =
         ClipEntity(
           title = title.trim(),
@@ -337,6 +375,7 @@ constructor(
           driveRevisionId =
             remoteId?.takeIf { it.startsWith("drive:") },
           lastSyncedAt = if (initialSync == ClipSyncState.SYNCED) now else null,
+          simHash = computedSimHash,
         )
       val newId = clipDao.insertClip(entity)
       SaveClipResult(clipId = newId, wasDuplicateMerged = false)
@@ -348,6 +387,12 @@ constructor(
       val hash = cryptoManager.sha256(trimmed)
       val storedContent = if (clip.isSensitive) cryptoManager.encryptLocal(trimmed) else trimmed
       val byteSize = trimmed.toByteArray(StandardCharsets.UTF_8).size.toLong()
+      val nextSimHash =
+        if (!clip.isSensitive && clip.contentType != ClipContentType.LINK && trimmed.length >= ClipLineageEngine.MIN_ELIGIBLE_CHARS) {
+          SimHash64.compute(trimmed)
+        } else {
+          0L
+        }
       val entity =
         ClipEntity(
           id = clip.id,
@@ -374,6 +419,11 @@ constructor(
           driveRevisionId = clip.driveRevisionId,
           lastSyncedAt = clip.lastSyncedAt,
           syncError = clip.syncError,
+          parentClipId = clip.parentClipId,
+          versionNumber = clip.versionNumber,
+          simHash = nextSimHash,
+          useCount = clip.useCount,
+          lastPastedAt = clip.lastPastedAt,
         )
       clipDao.updateClip(entity)
     }
@@ -475,6 +525,11 @@ constructor(
       driveRevisionId = driveRevisionId,
       lastSyncedAt = lastSyncedAt,
       syncError = syncError,
+      parentClipId = parentClipId,
+      versionNumber = versionNumber,
+      simHash = simHash,
+      useCount = useCount,
+      lastPastedAt = lastPastedAt,
     )
   }
 }

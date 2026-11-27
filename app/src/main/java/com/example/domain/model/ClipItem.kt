@@ -59,6 +59,11 @@ data class ClipItem(
   val driveRevisionId: String? = null,
   val lastSyncedAt: Long? = null,
   val syncError: String? = null,
+  val parentClipId: Long? = null,
+  val versionNumber: Int = 1,
+  val simHash: Long = 0L,
+  val useCount: Int = 0,
+  val lastPastedAt: Long? = null,
 )
 
 object CategoryDefaults {

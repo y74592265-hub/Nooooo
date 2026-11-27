@@ -54,10 +54,15 @@ class QuickCaptureActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     disableTransitionAnimations(isOpen = true)
 
-    // Attach a minimal focusable View so OEM skins dispatch onWindowFocusChanged(true) cleanly
+    // Attach a transparent focusable View so OEM skins (e.g. MIUI/HyperOS, OneUI) dispatch window focus cleanly
+    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
     val focusAnchor =
       View(this).apply {
-        layoutParams = ViewGroup.LayoutParams(1, 1)
+        layoutParams =
+          ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+          )
         isFocusable = true
         isFocusableInTouchMode = true
       }

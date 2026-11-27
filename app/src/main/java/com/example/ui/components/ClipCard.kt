@@ -143,6 +143,21 @@ fun ClipCard(
         Spacer(modifier = Modifier.width(8.dp))
         ContentTypeBadge(contentType = clip.contentType)
 
+        if (clip.versionNumber > 1) {
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = stringResource(R.string.details_version_badge, clip.versionNumber),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier =
+              Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+                .testTag("version_badge_${clip.id}"),
+          )
+        }
+
         if (clip.isSensitive) {
           Spacer(modifier = Modifier.width(6.dp))
           Icon(

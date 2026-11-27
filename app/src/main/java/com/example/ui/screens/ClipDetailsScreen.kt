@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -19,17 +21,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.PushPin
@@ -37,6 +44,7 @@ import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,12 +54,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalTextToolbar
@@ -60,9 +71,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.domain.intelligence.ClipSmartTools
+import com.example.domain.intelligence.ClipTemplateEngine
+import com.example.domain.lineage.LineDiffEngine
 import com.example.domain.model.Category
 import com.example.domain.model.ClipContentType
 import com.example.domain.model.ClipItem
+import com.example.domain.model.ClipRevision
+import com.example.domain.model.DiffLineType
+import com.example.domain.model.LineDiffResult
 import com.example.domain.model.SyncProviderId
 import com.example.ui.components.AddEditClipSheet
 import com.example.ui.components.ContentTypeBadge
@@ -72,6 +89,8 @@ import com.example.ui.components.localizedCategoryName
 import com.example.ui.theme.AppSpacing
 import com.example.ui.theme.FavoriteGold
 import com.example.ui.theme.JetBrainsMonoFamily
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -88,6 +107,11 @@ fun ClipDetailsScreen(
   onDelete: (Long) -> Unit,
   onPushToProvider: (ClipItem, SyncProviderId) -> Unit,
   onPasteSystemClipboard: () -> String?,
+  revisions: List<ClipRevision> = emptyList(),
+  onRestoreRevision: (Long) -> Unit = {},
+  onSplitRevision: (Long) -> Unit = {},
+  onApplyContentTransform: (String) -> Unit = {},
+  onCopySnippetText: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   if (clip == null) {
@@ -106,9 +130,60 @@ fun ClipDetailsScreen(
   val focusManager = LocalFocusManager.current
   var showEditSheet by remember { mutableStateOf(false) }
   var revealSensitive by remember(clip.id, clip.isSensitive) { mutableStateOf(!clip.isSensitive) }
+  var showDecodedPreview by remember(clip.id, clip.content) { mutableStateOf(false) }
+  var selectedRevisionId by remember(clip.id) { mutableStateOf<Long?>(null) }
+
+  LaunchedEffect(revisions) {
+    if (revisions.isNotEmpty() && revisions.none { it.id == selectedRevisionId }) {
+      selectedRevisionId = revisions.first().id
+    }
+  }
+
+  val selectedRevision = revisions.find { it.id == selectedRevisionId }
+  val diffResult by
+    produceState<LineDiffResult?>(
+      initialValue = null,
+      key1 = clip.content,
+      key2 = selectedRevision?.id,
+    ) {
+      value =
+        if (selectedRevision != null && !clip.isSensitive) {
+          withContext(Dispatchers.Default) {
+            LineDiffEngine.diff(previousText = selectedRevision.content, currentText = clip.content)
+          }
+        } else {
+          null
+        }
+    }
+
   val category = categories.find { it.id == clip.categoryId }
   val dateFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
   val shareTitle = stringResource(R.string.details_share_title)
+
+  val cleanedUrl = remember(clip.content, clip.isSensitive) {
+    if (clip.isSensitive) null else ClipSmartTools.stripTrackingParamsIfChanged(clip.content)
+  }
+  val prettyJson = remember(clip.content, clip.isSensitive) {
+    if (clip.isSensitive) null else ClipSmartTools.prettyJsonOrNull(clip.content)
+  }
+  val minifiedJson = remember(clip.content, clip.isSensitive) {
+    if (clip.isSensitive) null else ClipSmartTools.minifyJsonOrNull(clip.content)
+  }
+  val hasArabicDigits = remember(clip.content, clip.isSensitive) {
+    !clip.isSensitive && ClipSmartTools.hasArabicIndicDigits(clip.content)
+  }
+  val decodedPreview = remember(clip.content, clip.isSensitive) {
+    if (clip.isSensitive) null else ClipSmartTools.decodeJwtOrBase64Preview(clip.content)
+  }
+  val extractedEntities = remember(clip.content, clip.isSensitive) {
+    if (clip.isSensitive) emptyList() else ClipSmartTools.extractActionableEntities(clip.content)
+  }
+  val hasTemplateTokens = remember(clip.content, clip.isSensitive) {
+    !clip.isSensitive && ClipTemplateEngine.hasTemplateTokens(clip.content)
+  }
+  val templatePreviewText = remember(clip.content, hasTemplateTokens) {
+    if (hasTemplateTokens) ClipTemplateEngine.expand(clip.content) else null
+  }
 
   Column(
     modifier = modifier.fillMaxSize(),
@@ -135,6 +210,12 @@ fun ClipDetailsScreen(
           modifier = Modifier.weight(1f),
         ) {
           ContentTypeBadge(clip.contentType)
+          if (clip.versionNumber > 1) {
+            AssistChip(
+              onClick = {},
+              label = { Text(stringResource(R.string.details_version_badge, clip.versionNumber)) },
+            )
+          }
           AssistChip(
             onClick = {
               textToolbar.hide()
@@ -229,6 +310,158 @@ fun ClipDetailsScreen(
               else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.fillMaxWidth(),
           )
+        }
+      }
+
+      // Smart Zero-Dependency Instant Tools
+      val hasSmartTransforms =
+        cleanedUrl != null || prettyJson != null || minifiedJson != null || hasArabicDigits || decodedPreview != null
+      if (!clip.isSensitive && (hasTemplateTokens || hasSmartTransforms || extractedEntities.size > 1 || (extractedEntities.size == 1 && extractedEntities.first().value != clip.content.trim()))) {
+        VaultSectionCard(modifier = Modifier.testTag("details_smart_tools_card")) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Icon(
+              imageVector = Icons.Filled.AutoFixHigh,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp),
+            )
+            Text(
+              text = stringResource(R.string.details_smart_tools_title),
+              style = MaterialTheme.typography.titleMedium,
+            )
+          }
+
+          if (hasSmartTransforms) {
+            FlowRow(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              if (cleanedUrl != null) {
+                AssistChip(
+                  onClick = { onApplyContentTransform(cleanedUrl) },
+                  label = { Text(stringResource(R.string.tool_clean_url)) },
+                  modifier = Modifier.testTag("tool_clean_url_chip"),
+                )
+              }
+              if (prettyJson != null) {
+                AssistChip(
+                  onClick = { onApplyContentTransform(prettyJson) },
+                  label = { Text(stringResource(R.string.tool_format_json)) },
+                  modifier = Modifier.testTag("tool_format_json_chip"),
+                )
+              }
+              if (minifiedJson != null) {
+                AssistChip(
+                  onClick = { onApplyContentTransform(minifiedJson) },
+                  label = { Text(stringResource(R.string.tool_minify_json)) },
+                  modifier = Modifier.testTag("tool_minify_json_chip"),
+                )
+              }
+              if (hasArabicDigits) {
+                AssistChip(
+                  onClick = { onApplyContentTransform(ClipSmartTools.toWesternDigits(clip.content)) },
+                  label = { Text(stringResource(R.string.tool_western_digits)) },
+                  modifier = Modifier.testTag("tool_digits_chip"),
+                )
+              }
+              if (decodedPreview != null) {
+                AssistChip(
+                  onClick = { showDecodedPreview = !showDecodedPreview },
+                  label = { Text(stringResource(R.string.tool_decode_jwt_b64)) },
+                  modifier = Modifier.testTag("tool_decode_chip"),
+                )
+              }
+            }
+          }
+
+          if (showDecodedPreview && decodedPreview != null) {
+            Surface(
+              shape = MaterialTheme.shapes.small,
+              color = MaterialTheme.colorScheme.surfaceContainerHigh,
+              modifier = Modifier.fillMaxWidth().testTag("tool_decoded_preview"),
+            ) {
+              Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                  text = stringResource(R.string.tool_decoded_preview_title),
+                  style = MaterialTheme.typography.labelLarge,
+                  color = MaterialTheme.colorScheme.primary,
+                )
+                SelectionContainer {
+                  Text(
+                    text = decodedPreview,
+                    style =
+                      MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = JetBrainsMonoFamily,
+                        textDirection = TextDirection.Ltr,
+                      ),
+                  )
+                }
+              }
+            }
+          }
+
+          if (templatePreviewText != null) {
+            Surface(
+              shape = MaterialTheme.shapes.small,
+              color = MaterialTheme.colorScheme.surfaceContainerHigh,
+              modifier = Modifier.fillMaxWidth().testTag("tool_template_preview"),
+            ) {
+              Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                  Text(
+                    text = stringResource(R.string.template_preview_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                  )
+                  AssistChip(
+                    onClick = { onCopySnippetText(ClipTemplateEngine.expand(clip.content)) },
+                    label = { Text(stringResource(R.string.template_copy_filled)) },
+                    modifier = Modifier.testTag("tool_copy_template_chip"),
+                  )
+                }
+                Text(
+                  text = templatePreviewText,
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+              }
+            }
+          }
+
+          if (extractedEntities.isNotEmpty() && (extractedEntities.size > 1 || extractedEntities.first().value != clip.content.trim())) {
+            Text(
+              text = stringResource(R.string.tool_extracted_entities_title),
+              style = MaterialTheme.typography.labelMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              extractedEntities.forEachIndexed { idx, entity ->
+                AssistChip(
+                  onClick = { onCopySnippetText(entity.value) },
+                  leadingIcon = {
+                    Icon(Icons.Filled.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                  },
+                  label = {
+                    Text(
+                      text = entity.value.take(36),
+                      maxLines = 1,
+                    )
+                  },
+                  modifier = Modifier.testTag("extracted_entity_$idx"),
+                )
+              }
+            }
+          }
         }
       }
 
@@ -330,6 +563,136 @@ fun ClipDetailsScreen(
             Icon(Icons.AutoMirrored.Filled.Send, null, Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.details_sync_discord))
+          }
+        }
+      }
+
+      // Smart Clipboard Lineage & Diff Section
+      if (!clip.isSensitive && revisions.isNotEmpty()) {
+        VaultSectionCard(modifier = Modifier.testTag("details_lineage_card")) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              Icon(
+                imageVector = Icons.Filled.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+              )
+              Text(
+                text = stringResource(R.string.details_lineage_title, revisions.size + 1),
+                style = MaterialTheme.typography.titleMedium,
+              )
+            }
+            diffResult?.let { diff ->
+              Text(
+                text = diff.summaryBadge,
+                style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                color = MaterialTheme.colorScheme.primary,
+              )
+            }
+          }
+          Text(
+            text = stringResource(R.string.details_lineage_subtitle),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            revisions.forEach { rev ->
+              FilterChip(
+                selected = selectedRevision?.id == rev.id,
+                onClick = { selectedRevisionId = rev.id },
+                label = { Text("v${rev.versionNumber} (${rev.diffSummary.ifBlank { "~" }})") },
+                modifier = Modifier.testTag("revision_chip_${rev.id}"),
+              )
+            }
+          }
+
+          diffResult?.let { diff ->
+            Column(
+              modifier =
+                Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(10.dp))
+                  .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                  .padding(10.dp),
+              verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+              diff.lines.take(80).forEach { line ->
+                val (prefix, bgColor, textColor) =
+                  when (line.type) {
+                    DiffLineType.ADDED ->
+                      Triple(
+                        "+ ",
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                        MaterialTheme.colorScheme.onPrimaryContainer,
+                      )
+                    DiffLineType.REMOVED ->
+                      Triple(
+                        "- ",
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
+                        MaterialTheme.colorScheme.onErrorContainer,
+                      )
+                    DiffLineType.UNCHANGED ->
+                      Triple(
+                        "  ",
+                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                        MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                  }
+                Text(
+                  text = "$prefix${line.text}",
+                  style =
+                    MaterialTheme.typography.bodySmall.copy(
+                      fontFamily = JetBrainsMonoFamily,
+                      textDirection = TextDirection.Ltr,
+                    ),
+                  color = textColor,
+                  modifier =
+                    Modifier
+                      .fillMaxWidth()
+                      .background(bgColor)
+                      .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+              }
+              if (diff.wasTruncated) {
+                Text(
+                  text = stringResource(R.string.details_lineage_truncated),
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+            }
+          }
+
+          selectedRevision?.let { rev ->
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              OutlinedButton(
+                onClick = { onRestoreRevision(rev.id) },
+                modifier = Modifier.weight(1f).testTag("restore_revision_btn"),
+              ) {
+                Icon(Icons.Filled.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.details_lineage_restore_btn))
+              }
+              OutlinedButton(
+                onClick = { onSplitRevision(rev.id) },
+                modifier = Modifier.weight(1f).testTag("split_revision_btn"),
+              ) {
+                Icon(Icons.AutoMirrored.Filled.CallSplit, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.details_lineage_split_btn))
+              }
+            }
           }
         }
       }

@@ -116,6 +116,7 @@ import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StorageCapacityScreen
 import com.example.ui.screens.TrashScreen
 import com.example.ui.theme.SmartClipboardTheme
+import com.example.ui.viewmodel.ClipDetailsViewModel
 import com.example.ui.viewmodel.ClipboardViewModel
 import com.example.ui.viewmodel.RecoveryViewModel
 import com.example.ui.viewmodel.SettingsViewModel
@@ -140,6 +141,8 @@ fun SmartClipboardRoot(
   onRequestUnlock: () -> Unit,
   clipboardViewModel: ClipboardViewModel = hiltViewModel(),
   settingsViewModel: SettingsViewModel = hiltViewModel(),
+  shortcutAction: String? = null,
+  onShortcutActionConsumed: () -> Unit = {},
 ) {
   val settings by settingsViewModel.userSettings.collectAsStateWithLifecycle()
   val baseContext = LocalContext.current
@@ -224,6 +227,25 @@ fun SmartClipboardRoot(
           prefillSource = ClipSource.SHARE_SHEET
           showAddSheet = true
           onSharedTextConsumed()
+        }
+      }
+
+      LaunchedEffect(shortcutAction) {
+        when (shortcutAction) {
+          com.example.MainActivity.ACTION_SHORTCUT_NEW_CLIP -> {
+            prefillContent = ""
+            prefillSource = ClipSource.MANUAL
+            showAddSheet = true
+            onShortcutActionConsumed()
+          }
+          com.example.MainActivity.ACTION_SHORTCUT_SEARCH -> {
+            navController.navigate(SearchRoute) {
+              popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+              launchSingleTop = true
+              restoreState = true
+            }
+            onShortcutActionConsumed()
+          }
         }
       }
 
@@ -569,6 +591,7 @@ fun SmartClipboardRoot(
                     onClearSelection = clipboardViewModel::clearSelection,
                     onBulkDelete = clipboardViewModel::moveToTrash,
                     onBulkMoveCategory = clipboardViewModel::moveSelectedToCategory,
+                    onMergeSelected = clipboardViewModel::mergeSelectedClips,
                     onOpenClipDetails = { id -> navController.navigate(ClipDetailsRoute(id)) },
                     onCopyClip = clipboardViewModel::copyClip,
                     onTogglePin = clipboardViewModel::togglePin,
@@ -761,6 +784,11 @@ fun SmartClipboardRoot(
                     onDeleteCloudToggle = settingsViewModel::setDeleteCloudOnLocalDelete,
                     onOpenStorageManager = { navController.navigate(StorageCapacityRoute) },
                     onShowMessage = settingsViewModel::emitMessage,
+                    onAdaptiveImeToggle = settingsViewModel::setAdaptiveImeEnabled,
+                    onUsageLearningToggle = settingsViewModel::setUsageLearningEnabled,
+                    onSmartLineageToggle = settingsViewModel::setSmartLineageEnabled,
+                    onClearUsageLearning = settingsViewModel::clearUsageLearningData,
+                    onClearLineageHistory = settingsViewModel::clearLineageHistory,
                   )
                 }
 
@@ -776,10 +804,20 @@ fun SmartClipboardRoot(
 
                 composable<ClipDetailsRoute> { entry ->
                   val route = entry.toRoute<ClipDetailsRoute>()
+                  val detailsViewModel: ClipDetailsViewModel = hiltViewModel()
+                  LaunchedEffect(route.clipId) {
+                    detailsViewModel.bindClip(route.clipId)
+                  }
+                  LaunchedEffect(detailsViewModel) {
+                    detailsViewModel.events.collect {
+                      snackbarHostState.showSnackbar(it.resolve(activeLocalizedContext))
+                    }
+                  }
                   val clip by
                     clipboardViewModel
                       .observeClip(route.clipId)
                       .collectAsStateWithLifecycle(initialValue = null)
+                  val revisions by detailsViewModel.revisions.collectAsStateWithLifecycle()
                   ClipDetailsScreen(
                     clip = clip,
                     categories = categories,
@@ -793,6 +831,17 @@ fun SmartClipboardRoot(
                     },
                     onPushToProvider = clipboardViewModel::pushSingleClipToProvider,
                     onPasteSystemClipboard = clipboardViewModel::readSystemClipboardNow,
+                    revisions = revisions,
+                    onRestoreRevision = { revId ->
+                      detailsViewModel.restoreRevision(route.clipId, revId)
+                    },
+                    onSplitRevision = { revId ->
+                      detailsViewModel.splitRevision(route.clipId, revId)
+                    },
+                    onApplyContentTransform = { transformed ->
+                      detailsViewModel.applyContentTransform(route.clipId, transformed)
+                    },
+                    onCopySnippetText = detailsViewModel::copyExtractedSnippet,
                   )
                 }
               }

@@ -20,9 +20,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ContentPasteGo
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Security
@@ -82,6 +84,11 @@ fun SettingsScreen(
   onDeleteCloudToggle: (Boolean) -> Unit = {},
   onOpenStorageManager: () -> Unit = {},
   onShowMessage: (String) -> Unit = {},
+  onAdaptiveImeToggle: (Boolean) -> Unit = {},
+  onUsageLearningToggle: (Boolean) -> Unit = {},
+  onSmartLineageToggle: (Boolean) -> Unit = {},
+  onClearUsageLearning: () -> Unit = {},
+  onClearLineageHistory: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
@@ -278,6 +285,59 @@ fun SettingsScreen(
           ) {
             Text(stringResource(R.string.settings_ime_picker_btn))
           }
+        }
+      }
+
+      // Group 2b: Adaptive Intelligence & Smart Lineage Privacy Controls
+      VaultSectionCard {
+        SettingsGroupHeader(
+          icon = Icons.Filled.AutoAwesome,
+          title = stringResource(R.string.settings_group_intelligence),
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_adaptive_ime_title),
+          subtitle = stringResource(R.string.settings_adaptive_ime_subtitle),
+          checked = settings.adaptiveImeEnabled,
+          onCheckedChange = onAdaptiveImeToggle,
+          testTag = "adaptive_ime_switch",
+        )
+
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_usage_learning_title),
+          subtitle = stringResource(R.string.settings_usage_learning_subtitle),
+          checked = settings.usageLearningEnabled,
+          onCheckedChange = onUsageLearningToggle,
+          testTag = "usage_learning_switch",
+        )
+
+        SettingsToggleRow(
+          title = stringResource(R.string.settings_smart_lineage_title),
+          subtitle = stringResource(R.string.settings_smart_lineage_subtitle),
+          checked = settings.smartLineageEnabled,
+          onCheckedChange = onSmartLineageToggle,
+          testTag = "smart_lineage_switch",
+        )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        OutlinedButton(
+          onClick = onClearUsageLearning,
+          modifier = Modifier.fillMaxWidth().testTag("clear_learning_btn"),
+        ) {
+          Icon(Icons.Filled.CleaningServices, contentDescription = null)
+          Spacer(Modifier.width(8.dp))
+          Text(stringResource(R.string.settings_clear_learning_btn))
+        }
+
+        OutlinedButton(
+          onClick = onClearLineageHistory,
+          modifier = Modifier.fillMaxWidth().testTag("clear_lineage_btn"),
+        ) {
+          Icon(Icons.Filled.History, contentDescription = null)
+          Spacer(Modifier.width(8.dp))
+          Text(stringResource(R.string.settings_clear_lineage_btn))
         }
       }
 

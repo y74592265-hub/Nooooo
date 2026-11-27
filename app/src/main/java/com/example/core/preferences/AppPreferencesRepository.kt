@@ -59,6 +59,9 @@ data class UserSettings(
   val storageWarnThreshold3: Int = 95,
   val multiCopyTipDismissed: Boolean = false,
   val quickCaptureNotificationEnabled: Boolean = false,
+  val adaptiveImeEnabled: Boolean = true,
+  val usageLearningEnabled: Boolean = true,
+  val smartLineageEnabled: Boolean = true,
 )
 
 @Singleton
@@ -91,11 +94,17 @@ constructor(
     val STORAGE_WARN_3 = intPreferencesKey("storage_warn_3")
     val MULTI_COPY_TIP_DISMISSED = booleanPreferencesKey("multi_copy_tip_dismissed")
     val QUICK_CAPTURE_NOTIFICATION = booleanPreferencesKey("quick_capture_notification")
+    val ADAPTIVE_IME_ENABLED = booleanPreferencesKey("adaptive_ime_enabled")
+    val USAGE_LEARNING_ENABLED = booleanPreferencesKey("usage_learning_enabled")
+    val SMART_LINEAGE_ENABLED = booleanPreferencesKey("smart_lineage_enabled")
 
     val TELEGRAM_CONFIG_ENC = stringPreferencesKey("telegram_config_enc")
     val DISCORD_CONFIG_ENC = stringPreferencesKey("discord_config_enc")
     val DRIVE_CONFIG_ENC = stringPreferencesKey("drive_config_enc")
   }
+
+  @Volatile var latestSettingsSnapshot: UserSettings = UserSettings()
+    private set
 
   val userSettings: Flow<UserSettings> =
     context.smartClipboardDataStore.data
@@ -124,7 +133,10 @@ constructor(
           storageWarnThreshold3 = prefs[Keys.STORAGE_WARN_3] ?: 95,
           multiCopyTipDismissed = prefs[Keys.MULTI_COPY_TIP_DISMISSED] ?: false,
           quickCaptureNotificationEnabled = prefs[Keys.QUICK_CAPTURE_NOTIFICATION] ?: false,
-        )
+          adaptiveImeEnabled = prefs[Keys.ADAPTIVE_IME_ENABLED] ?: true,
+          usageLearningEnabled = prefs[Keys.USAGE_LEARNING_ENABLED] ?: true,
+          smartLineageEnabled = prefs[Keys.SMART_LINEAGE_ENABLED] ?: true,
+        ).also { latestSettingsSnapshot = it }
       }
       .distinctUntilChanged()
       .flowOn(Dispatchers.Default)
@@ -271,6 +283,18 @@ constructor(
 
   suspend fun updateQuickCaptureNotificationEnabled(enabled: Boolean) {
     context.smartClipboardDataStore.edit { it[Keys.QUICK_CAPTURE_NOTIFICATION] = enabled }
+  }
+
+  suspend fun updateAdaptiveImeEnabled(enabled: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.ADAPTIVE_IME_ENABLED] = enabled }
+  }
+
+  suspend fun updateUsageLearningEnabled(enabled: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.USAGE_LEARNING_ENABLED] = enabled }
+  }
+
+  suspend fun updateSmartLineageEnabled(enabled: Boolean) {
+    context.smartClipboardDataStore.edit { it[Keys.SMART_LINEAGE_ENABLED] = enabled }
   }
 
   suspend fun saveTelegramConfig(config: TelegramConfig) {

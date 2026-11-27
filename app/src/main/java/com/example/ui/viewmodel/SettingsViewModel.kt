@@ -10,6 +10,8 @@ import com.example.core.preferences.AppLanguage
 import com.example.core.preferences.AppPreferencesRepository
 import com.example.core.preferences.ThemeMode
 import com.example.core.preferences.UserSettings
+import com.example.domain.intelligence.UsageLearningEngine
+import com.example.domain.repository.ClipLineageRepository
 import com.example.domain.repository.ClipRepository
 import com.example.domain.repository.SyncLogRepository
 import com.example.ui.components.UiText
@@ -34,6 +36,8 @@ constructor(
   private val clipRepository: ClipRepository,
   private val syncLogRepository: SyncLogRepository,
   private val clipboardHelper: SystemClipboardHelper,
+  private val usageLearningEngine: UsageLearningEngine,
+  private val clipLineageRepository: ClipLineageRepository,
 ) : ViewModel() {
 
   val userSettings: StateFlow<UserSettings> =
@@ -130,8 +134,36 @@ constructor(
     viewModelScope.launch { _events.emit(UiText.Resource(R.string.msg_sys_clipboard_cleared)) }
   }
 
+  fun setAdaptiveImeEnabled(enabled: Boolean) {
+    viewModelScope.launch { prefs.updateAdaptiveImeEnabled(enabled) }
+  }
+
+  fun setUsageLearningEnabled(enabled: Boolean) {
+    viewModelScope.launch { prefs.updateUsageLearningEnabled(enabled) }
+  }
+
+  fun setSmartLineageEnabled(enabled: Boolean) {
+    viewModelScope.launch { prefs.updateSmartLineageEnabled(enabled) }
+  }
+
+  fun clearUsageLearningData() {
+    viewModelScope.launch {
+      usageLearningEngine.clearAllLearningData()
+      _events.emit(UiText.Resource(R.string.msg_learning_cleared))
+    }
+  }
+
+  fun clearLineageHistory() {
+    viewModelScope.launch {
+      clipLineageRepository.clearAllRevisions()
+      _events.emit(UiText.Resource(R.string.msg_lineage_cleared))
+    }
+  }
+
   fun wipeAllData() {
     viewModelScope.launch {
+      usageLearningEngine.clearAllLearningData()
+      clipLineageRepository.clearAllRevisions()
       clipRepository.wipeAllData()
       syncLogRepository.clearLogs()
       prefs.clearAllPreferences()

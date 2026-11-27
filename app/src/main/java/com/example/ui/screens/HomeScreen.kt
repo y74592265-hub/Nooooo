@@ -290,7 +290,7 @@ fun HomeScreen(
                   modifier = Modifier.testTag("home_toggle_notif_btn"),
                 ) {
                   Text(
-                    if (quickCaptureNotificationEnabled) stringResource(R.string.quick_notif_action)
+                    if (quickCaptureNotificationEnabled) stringResource(R.string.quick_notif_active_badge)
                     else stringResource(R.string.settings_quick_notif_title)
                   )
                 }

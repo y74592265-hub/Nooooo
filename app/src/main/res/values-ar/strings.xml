@@ -430,11 +430,89 @@
     <string name="multicopy_dismiss_btn">فهمت</string>
     <string name="settings_multicopy_note">يمنع نظام أندرويد 10+ قراءة الحافظة في الخلفية ويستبدل النص السابق عند النسخ مرتين قبل فتح التطبيق. فعّل «إشعار الالتقاط السريع» أو مربع الإعدادات السريعة أو «حفظ سريع بالحافظة» لحفظ كل نسخة فورًا دون مغادرة تطبيقك.</string>
     <string name="settings_quick_notif_title">إشعار الالتقاط السريع</string>
-    <string name="settings_quick_notif_subtitle">إبقاء إشعار صامت بزر «حفظ المنسوخ» لحفظ أكثر من نص متتالي بنقرة واحدة من داخل أي تطبيق</string>
+    <string name="settings_quick_notif_subtitle">إبقاء إشعار ثابت صامت بزر «حفظ المنسوخ» لحفظ أكثر من نص بنقرة واحدة من أي تطبيق (بدون استهلاك بطارية — لا يعمل في الخلفية)</string>
+    <string name="quick_notif_active_badge">إشعار الالتقاط: مفعّل</string>
     <string name="quick_notif_channel_name">الالتقاط السريع للحافظة</string>
     <string name="quick_notif_channel_desc">إشعار صامت يتيح حفظ النص المنسوخ بنقرة واحدة من أي تطبيق</string>
     <string name="quick_notif_title">الحافظة الذكية جاهزة للالتقاط</string>
     <string name="quick_notif_body">بعد نسخ أي نص في تطبيق آخر، اضغط «حفظ المنسوخ» هنا لحفظه فورًا دون مغادرة تطبيقك.</string>
     <string name="quick_notif_action">حفظ المنسوخ</string>
     <string name="quick_notif_permission_denied">تم رفض إذن الإشعارات — فعّله من إعدادات التطبيق لاستخدام إشعار الالتقاط السريع.</string>
+
+    <!-- Adaptive Field-Aware IME, Password Shield & Next-Clip -->
+    <string name="ime_shield_title">درع كلمات المرور مفعّل</string>
+    <string name="ime_shield_hint">تم رصد حقل سري — تم إيقاف الاقتراحات والالتقاط والتعلم لحماية خصوصيتك.</string>
+    <string name="ime_filter_all">الذكي</string>
+    <string name="ime_filter_links">روابط</string>
+    <string name="ime_filter_code">كود</string>
+    <string name="ime_filter_pinned">مثبّت</string>
+    <string name="ime_context_url">حقل رابط • اقتراحات مطابقة</string>
+    <string name="ime_context_email">حقل بريد • اقتراحات مطابقة</string>
+    <string name="ime_context_phone">حقل رقم/هاتف • اقتراحات مطابقة</string>
+    <string name="ime_context_code">حقل كود/ملاحظة • اقتراحات مطابقة</string>
+    <string name="ime_reason_next">التالي</string>
+    <string name="ime_reason_match">مطابق</string>
+    <string name="ime_reason_pin">مثبّت</string>
+
+    <!-- Smart Lineage, Version Diff & Zero-Dep Smart Tools -->
+    <string name="msg_clip_version_stacked">تم تحديث المسودة كإصدار v%1$d (مع حفظ النسخة السابقة)</string>
+    <string name="msg_revision_restored">تمت استعادة الإصدار بنجاح</string>
+    <string name="msg_revision_split">تم فصل الإصدار كنص مستقل</string>
+    <string name="msg_learning_cleared">تم مسح بيانات تعلم التوقعات</string>
+    <string name="msg_lineage_cleared">تم مسح سجل إصدارات المسودات</string>
+    <string name="details_smart_tools_title">أدوات ذكية فورية (محلية)</string>
+    <string name="tool_clean_url">تنظيف روابط التتبع</string>
+    <string name="tool_format_json">تنسيق JSON</string>
+    <string name="tool_minify_json">ضغط JSON</string>
+    <string name="tool_western_digits">٠١٢ ← 012</string>
+    <string name="tool_decode_jwt_b64">فك JWT / Base64</string>
+    <string name="tool_decoded_preview_title">معاينة الفك (محليًا)</string>
+    <string name="tool_extracted_entities_title">نسخ سريع للعناصر المستخرجة</string>
+    <string name="details_lineage_title">إصدارات المسودة والمقارنة (%1$d)</string>
+    <string name="details_lineage_subtitle">يتم تجميع المسودات المتشابهة خلال 48 ساعة في بطاقة واحدة مع مقارنة التغييرات سطرًا بسطر.</string>
+    <string name="details_lineage_truncated">تم اختصار المقارنة للنصوص الطويلة جدًا.</string>
+    <string name="details_lineage_restore_btn">استعادة هذا الإصدار</string>
+    <string name="details_lineage_split_btn">فصل كنص مستقل</string>
+    <string name="details_version_badge">v%1$d</string>
+
+    <!-- Settings: Adaptive Intelligence & Privacy -->
+    <string name="settings_group_intelligence">الذكاء التكيفي وتاريخ المسودات</string>
+    <string name="settings_adaptive_ime_title">لوحة المفاتيح الذكية حسب الحقل</string>
+    <string name="settings_adaptive_ime_subtitle">ترتيب الروابط والإيميلات والأرقام والأكواد أولًا في اللوحة المساعدة — وتُحجب تمامًا في حقول كلمات المرور</string>
+    <string name="settings_usage_learning_title">توقع النص التالي محليًا (On-Device)</string>
+    <string name="settings_usage_learning_subtitle">يتعلم تسلسل اللصق محليًا فقط لتحسين الترتيب؛ ولا يسجل كلمات المرور أو العناصر الحساسة أبدًا</string>
+    <string name="settings_smart_lineage_title">تجميع إصدارات المسودات الذكي</string>
+    <string name="settings_smart_lineage_subtitle">دمج المسودات المعدلة المتقاربة خلال 48 ساعة في بطاقة واحدة مع عرض الفروقات (Diff)</string>
+    <string name="settings_clear_learning_btn">مسح بيانات التعلم والتوقعات</string>
+    <string name="settings_clear_lineage_btn">مسح سجل إصدارات المسودات</string>
+
+    <!-- Home Screen Widget & App Shortcuts -->
+    <string name="widget_description">نسخ سريع لأهم النصوص غير الحساسة والتقاط الحافظة بنقرة واحدة من الشاشة الرئيسية</string>
+    <string name="widget_capture_btn">+ التقاط</string>
+    <string name="widget_empty_text">لا توجد نصوص بعد — اضغط + التقاط بعد نسخ أي نص</string>
+    <string name="widget_locked_text">الخزنة مقفلة — اضغط هنا لفتح القفل</string>
+    <string name="shortcut_capture_short">التقاط</string>
+    <string name="shortcut_capture_long">التقاط الحافظة الآن</string>
+    <string name="shortcut_new_clip_short">نص جديد</string>
+    <string name="shortcut_new_clip_long">إنشاء نص جديد</string>
+    <string name="shortcut_search_short">بحث</string>
+    <string name="shortcut_search_long">البحث في الحافظة الذكية</string>
+
+    <!-- Multi-Clip Merge & Dynamic Snippet Templates -->
+    <string name="bulk_merge_action">دمج المحدد</string>
+    <string name="merge_dialog_title">دمج %1$d نصوص محددة</string>
+    <string name="merge_separator_label">الفاصل بين النصوص</string>
+    <string name="merge_sep_blank_line">سطر فارغ</string>
+    <string name="merge_sep_new_line">سطر جديد</string>
+    <string name="merge_sep_space">مسافة</string>
+    <string name="merge_sep_comma">فاصلة</string>
+    <string name="merge_delete_originals">نقل النصوص الأصلية إلى سلة المحذوفات بعد الدمج</string>
+    <string name="merge_sensitive_skipped_warn">ملاحظة: يتم استثناء النصوص الحساسة المشفرة من الدمج النصي لحمايتك.</string>
+    <string name="merge_default_title">نصوص مدمجة (%1$d)</string>
+    <string name="msg_clips_merged">تم دمج %1$d نصوص في عنصر واحد</string>
+    <string name="msg_merge_need_two_nonsensitive">اختر نصين غير حساسين على الأقل للدمج</string>
+    <string name="template_tokens_hint">متغيرات ذكية (تُملأ تلقائيًا عند النسخ):</string>
+    <string name="template_preview_title">معاينة القالب التلقائي</string>
+    <string name="template_copy_filled">نسخ النص المعبّأ</string>
+    <string name="msg_template_copied">تمت تعبئة القالب ونسخه للحافظة</string>
 </resources>

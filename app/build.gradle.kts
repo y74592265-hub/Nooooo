@@ -10,6 +10,10 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
 }
 
+ksp {
+  arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }

@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.Flow
 data class SaveClipResult(
   val clipId: Long,
   val wasDuplicateMerged: Boolean,
+  val wasLineageVersioned: Boolean = false,
+  val newVersionNumber: Int = 1,
 )
 
 data class StorageAggregateSnapshot(

@@ -21,14 +21,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,6 +80,7 @@ fun AllClipsScreen(
   onClearSelection: () -> Unit,
   onBulkDelete: (List<Long>) -> Unit,
   onBulkMoveCategory: (Long) -> Unit,
+  onMergeSelected: (separator: String, deleteOriginals: Boolean, mergedTitle: String) -> Unit = { _, _, _ -> },
   onOpenClipDetails: (Long) -> Unit,
   onCopyClip: (ClipItem) -> Unit,
   onTogglePin: (ClipItem) -> Unit,
@@ -86,6 +91,9 @@ fun AllClipsScreen(
   var filterCategoryId by remember { mutableStateOf<Long?>(null) }
   var showMoveMenu by remember { mutableStateOf(false) }
   var showDeleteConfirm by remember { mutableStateOf(false) }
+  var showMergeDialog by remember { mutableStateOf(false) }
+  var mergeSeparatorIndex by remember { mutableStateOf(0) }
+  var deleteOriginalsOnMerge by remember { mutableStateOf(false) }
 
   val categoryMap = remember(categories) { categories.associateBy { it.id } }
   val filtered =
@@ -126,6 +134,17 @@ fun AllClipsScreen(
               )
             }
             Row {
+              if (selectedClipIds.size >= 2) {
+                IconButton(
+                  onClick = { showMergeDialog = true },
+                  modifier = Modifier.minimumInteractiveComponentSize().testTag("bulk_merge_btn"),
+                ) {
+                  Icon(
+                    Icons.AutoMirrored.Filled.CallMerge,
+                    contentDescription = stringResource(R.string.bulk_merge_action),
+                  )
+                }
+              }
               IconButton(
                 onClick = { onSelectAll(filtered.map { it.id }) },
                 modifier = Modifier.minimumInteractiveComponentSize().testTag("select_all_btn"),
@@ -296,6 +315,85 @@ fun AllClipsScreen(
       },
       dismissButton = {
         TextButton(onClick = { showDeleteConfirm = false }) {
+          Text(stringResource(R.string.action_cancel))
+        }
+      },
+    )
+  }
+
+  if (showMergeDialog) {
+    val selectedClips = clips.filter { selectedClipIds.contains(it.id) }
+    val hasSensitiveSelected = selectedClips.any { it.isSensitive }
+    val nonSensitiveCount = selectedClips.count { !it.isSensitive }.coerceAtLeast(selectedClipIds.size - selectedClips.count { it.isSensitive })
+    val sepOptions =
+      listOf(
+        "\n\n" to stringResource(R.string.merge_sep_blank_line),
+        "\n" to stringResource(R.string.merge_sep_new_line),
+        " " to stringResource(R.string.merge_sep_space),
+        ", " to stringResource(R.string.merge_sep_comma),
+      )
+    val defaultTitle = stringResource(R.string.merge_default_title, nonSensitiveCount)
+
+    AlertDialog(
+      onDismissRequest = { showMergeDialog = false },
+      modifier = Modifier.testTag("merge_clips_dialog"),
+      title = { Text(stringResource(R.string.merge_dialog_title, selectedClipIds.size)) },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          if (hasSensitiveSelected) {
+            Text(
+              text = stringResource(R.string.merge_sensitive_skipped_warn),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.tertiary,
+            )
+          }
+          Text(
+            text = stringResource(R.string.merge_separator_label),
+            style = MaterialTheme.typography.labelLarge,
+          )
+          Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            sepOptions.forEachIndexed { idx, (_, label) ->
+              FilterChip(
+                selected = mergeSeparatorIndex == idx,
+                onClick = { mergeSeparatorIndex = idx },
+                label = { Text(label) },
+                modifier = Modifier.testTag("merge_sep_chip_$idx"),
+              )
+            }
+          }
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Checkbox(
+              checked = deleteOriginalsOnMerge,
+              onCheckedChange = { deleteOriginalsOnMerge = it },
+              modifier = Modifier.testTag("merge_delete_originals_chk"),
+            )
+            Text(
+              text = stringResource(R.string.merge_delete_originals),
+              style = MaterialTheme.typography.bodySmall,
+            )
+          }
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            showMergeDialog = false
+            val sep = sepOptions.getOrElse(mergeSeparatorIndex) { sepOptions.first() }.first
+            onMergeSelected(sep, deleteOriginalsOnMerge, defaultTitle)
+          },
+          modifier = Modifier.testTag("merge_confirm_btn"),
+        ) {
+          Text(stringResource(R.string.bulk_merge_action))
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showMergeDialog = false }) {
           Text(stringResource(R.string.action_cancel))
         }
       },

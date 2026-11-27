@@ -35,6 +35,10 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- Translucent Quick Capture Activity for Quick Settings Tile & Context Menu Quick Save -->
@@ -81,6 +85,20 @@
                 android:name="android.view.im"
                 android:resource="@xml/smart_clipboard_ime" />
         </service>
+
+        <!-- Home Screen Clipboard Widget (non-sensitive clips + 1-tap capture) -->
+        <receiver
+            android:name=".core.widget.ClipboardWidgetProvider"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.action.WIDGET_COPY_CLIP" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/smart_clipboard_widget_info" />
+        </receiver>
 
         <!-- Custom WorkManager initialization for HiltWorkerFactory -->
         <provider

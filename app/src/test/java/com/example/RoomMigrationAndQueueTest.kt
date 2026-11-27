@@ -227,7 +227,10 @@ class RoomMigrationAndQueueTest {
 
     val migratedDb =
       Room.databaseBuilder(context, SmartClipboardDatabase::class.java, dbName)
-        .addMigrations(SmartClipboardDatabase.MIGRATION_1_2)
+        .addMigrations(
+          SmartClipboardDatabase.MIGRATION_1_2,
+          SmartClipboardDatabase.MIGRATION_2_3,
+        )
         .allowMainThreadQueries()
         .build()
 
@@ -262,6 +265,184 @@ class RoomMigrationAndQueueTest {
       context.deleteDatabase(dbName)
     }
   }
+
+  @Test
+  fun `migration 2 to 3 preserves v2 plain and sensitive clips creates revisions and transitions tables`() =
+    runTest {
+      val dbName = "smart_clipboard_mig_v2_v3_test.db"
+      context.deleteDatabase(dbName)
+      val encSecret = crypto.encryptLocal("my-secret-password-999")
+
+      val callback =
+        object : SupportSQLiteOpenHelper.Callback(2) {
+          override fun onCreate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+              """
+              CREATE TABLE IF NOT EXISTS `clips` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `title` TEXT NOT NULL,
+                `content` TEXT NOT NULL,
+                `contentHash` TEXT NOT NULL,
+                `contentType` TEXT NOT NULL,
+                `categoryId` INTEGER NOT NULL,
+                `tagsCsv` TEXT NOT NULL,
+                `isPinned` INTEGER NOT NULL,
+                `isFavorite` INTEGER NOT NULL,
+                `isSensitive` INTEGER NOT NULL,
+                `isTrashed` INTEGER NOT NULL,
+                `trashedAt` INTEGER,
+                `createdAt` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                `source` TEXT NOT NULL,
+                `remoteId` TEXT,
+                `syncStatus` TEXT NOT NULL,
+                `contentSizeBytes` INTEGER NOT NULL,
+                `telegramMessageId` TEXT,
+                `discordMessageId` TEXT,
+                `driveRevisionId` TEXT,
+                `lastSyncedAt` INTEGER,
+                `syncError` TEXT
+              )
+              """
+                .trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_clips_contentHash` ON `clips` (`contentHash`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_clips_categoryId` ON `clips` (`categoryId`)")
+            db.execSQL(
+              "CREATE INDEX IF NOT EXISTS `index_clips_isTrashed_isPinned_updatedAt` ON `clips` (`isTrashed`, `isPinned`, `updatedAt`)"
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_clips_isFavorite` ON `clips` (`isFavorite`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_clips_contentType` ON `clips` (`contentType`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_clips_syncStatus` ON `clips` (`syncStatus`)")
+            db.execSQL(
+              "CREATE VIRTUAL TABLE IF NOT EXISTS `clips_fts` USING FTS4(`title` TEXT, `content` TEXT, `tagsCsv` TEXT, content=`clips`)"
+            )
+            db.execSQL(
+              "CREATE TRIGGER IF NOT EXISTS `room_fts_content_sync_clips_fts_BEFORE_UPDATE` BEFORE UPDATE ON `clips` BEGIN DELETE FROM `clips_fts` WHERE `docid`=OLD.`rowid`; END"
+            )
+            db.execSQL(
+              "CREATE TRIGGER IF NOT EXISTS `room_fts_content_sync_clips_fts_BEFORE_DELETE` BEFORE DELETE ON `clips` BEGIN DELETE FROM `clips_fts` WHERE `docid`=OLD.`rowid`; END"
+            )
+            db.execSQL(
+              "CREATE TRIGGER IF NOT EXISTS `room_fts_content_sync_clips_fts_AFTER_UPDATE` AFTER UPDATE ON `clips` BEGIN INSERT INTO `clips_fts`(`docid`, `title`, `content`, `tagsCsv`) VALUES (NEW.`rowid`, NEW.`title`, NEW.`content`, NEW.`tagsCsv`); END"
+            )
+            db.execSQL(
+              "CREATE TRIGGER IF NOT EXISTS `room_fts_content_sync_clips_fts_AFTER_INSERT` AFTER INSERT ON `clips` BEGIN INSERT INTO `clips_fts`(`docid`, `title`, `content`, `tagsCsv`) VALUES (NEW.`rowid`, NEW.`title`, NEW.`content`, NEW.`tagsCsv`); END"
+            )
+            db.execSQL(
+              """
+              CREATE TABLE IF NOT EXISTS `sync_queue` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `clipId` INTEGER NOT NULL,
+                `provider` TEXT NOT NULL,
+                `operation` TEXT NOT NULL,
+                `remoteTargetId` TEXT,
+                `status` TEXT NOT NULL,
+                `retryCount` INTEGER NOT NULL,
+                `nextRetryAt` INTEGER NOT NULL,
+                `lastError` TEXT,
+                `createdAt` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL
+              )
+              """
+                .trimIndent()
+            )
+            db.execSQL(
+              "CREATE INDEX IF NOT EXISTS `index_sync_queue_provider_status_nextRetryAt` ON `sync_queue` (`provider`, `status`, `nextRetryAt`)"
+            )
+            db.execSQL(
+              "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_queue_clipId_provider_operation` ON `sync_queue` (`clipId`, `provider`, `operation`)"
+            )
+            db.execSQL(
+              """
+              CREATE TABLE IF NOT EXISTS `categories` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `name` TEXT NOT NULL,
+                `colorHex` INTEGER NOT NULL,
+                `iconKey` TEXT NOT NULL,
+                `isDefault` INTEGER NOT NULL,
+                `sortOrder` INTEGER NOT NULL
+              )
+              """
+                .trimIndent()
+            )
+            db.execSQL(
+              """
+              CREATE TABLE IF NOT EXISTS `sync_logs` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `provider` TEXT NOT NULL,
+                `direction` TEXT NOT NULL,
+                `status` TEXT NOT NULL,
+                `message` TEXT NOT NULL,
+                `itemsCount` INTEGER NOT NULL,
+                `timestamp` INTEGER NOT NULL
+              )
+              """
+                .trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_sync_logs_timestamp` ON `sync_logs` (`timestamp`)")
+          }
+
+          override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }
+
+      val v2Helper =
+        FrameworkSQLiteOpenHelperFactory()
+          .create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+              .name(dbName)
+              .callback(callback)
+              .build()
+          )
+      val v2Db = v2Helper.writableDatabase
+      v2Db.execSQL(
+        "INSERT INTO `categories` (`id`, `name`, `colorHex`, `iconKey`, `isDefault`, `sortOrder`) VALUES (1, 'Personal', 4282089206, 'person', 1, 1)"
+      )
+      v2Db.execSQL(
+        """
+        INSERT INTO `clips` (`id`, `title`, `content`, `contentHash`, `contentType`, `categoryId`, `tagsCsv`, `isPinned`, `isFavorite`, `isSensitive`, `isTrashed`, `trashedAt`, `createdAt`, `updatedAt`, `source`, `remoteId`, `syncStatus`, `contentSizeBytes`, `telegramMessageId`, `discordMessageId`, `driveRevisionId`, `lastSyncedAt`, `syncError`)
+        VALUES (10, 'V2 Draft', 'Draft body text ready for v3', 'hash_v2_plain', 'NOTE', 1, 'draft', 0, 0, 0, 0, NULL, 1000, 2000, 'MANUAL', NULL, 'LOCAL_ONLY', 25, NULL, NULL, NULL, NULL, NULL)
+        """
+          .trimIndent()
+      )
+      v2Db.execSQL(
+        """
+        INSERT INTO `clips` (`id`, `title`, `content`, `contentHash`, `contentType`, `categoryId`, `tagsCsv`, `isPinned`, `isFavorite`, `isSensitive`, `isTrashed`, `trashedAt`, `createdAt`, `updatedAt`, `source`, `remoteId`, `syncStatus`, `contentSizeBytes`, `telegramMessageId`, `discordMessageId`, `driveRevisionId`, `lastSyncedAt`, `syncError`)
+        VALUES (11, 'V2 Secret', '$encSecret', 'hash_v2_secret', 'TEXT', 1, '', 0, 0, 1, 0, NULL, 1000, 2100, 'MANUAL', NULL, 'LOCAL_ONLY', 22, NULL, NULL, NULL, NULL, NULL)
+        """
+          .trimIndent()
+      )
+      v2Db.close()
+      v2Helper.close()
+
+      val migratedDb =
+        Room.databaseBuilder(context, SmartClipboardDatabase::class.java, dbName)
+          .addMigrations(SmartClipboardDatabase.MIGRATION_2_3)
+          .allowMainThreadQueries()
+          .build()
+      try {
+        val repo = ClipRepositoryImpl(migratedDb.clipDao(), crypto, clipboardHelper)
+        val clips = repo.getAllActiveClipsOnce()
+        assertEquals(2, clips.size)
+        val plain = clips.first { it.id == 10L }
+        assertEquals(1, plain.versionNumber)
+        assertEquals(0, plain.useCount)
+        val secret = clips.first { it.id == 11L }
+        assertEquals("my-secret-password-999", secret.content)
+
+        // SQL IME isolation strictly skips sensitive row
+        val imeRows = migratedDb.clipDao().getImeCandidateProjections(limit = 20)
+        assertEquals(1, imeRows.size)
+        assertEquals(10L, imeRows.first().id)
+
+        // clip_transitions & clip_revisions operate cleanly after v2->v3 migration
+        migratedDb.clipTransitionDao().recordTransition(fromClipId = 10L, toClipId = 10L, nowMs = 5000L)
+        assertEquals(1, migratedDb.clipTransitionDao().getTopTransitionsFrom(10L).size)
+      } finally {
+        migratedDb.close()
+        context.deleteDatabase(dbName)
+      }
+    }
 
   @Test
   fun `sensitive detector classifies OTP password API token Luhn card and system flag accurately`() {

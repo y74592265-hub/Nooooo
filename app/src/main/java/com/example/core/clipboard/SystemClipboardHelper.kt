@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
+import com.example.core.widget.WidgetRefreshHelper
 import com.example.domain.model.ClipContentType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -93,6 +94,10 @@ class SystemClipboardHelper @Inject constructor(@ApplicationContext private val 
     } else {
       cm.setPrimaryClip(ClipData.newPlainText("", ""))
     }
+  }
+
+  fun refreshWidgets() {
+    WidgetRefreshHelper.requestRefresh(context)
   }
 
   fun classifyContent(content: String): ClipContentType {

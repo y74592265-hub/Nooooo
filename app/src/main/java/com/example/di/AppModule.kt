@@ -6,14 +6,18 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.local.CategoryDao
 import com.example.data.local.ClipDao
+import com.example.data.local.ClipRevisionDao
+import com.example.data.local.ClipTransitionDao
 import com.example.data.local.SmartClipboardDatabase
 import com.example.data.local.SyncLogDao
 import com.example.data.local.SyncQueueDao
 import com.example.data.repository.CategoryRepositoryImpl
+import com.example.data.repository.ClipLineageRepositoryImpl
 import com.example.data.repository.ClipRepositoryImpl
 import com.example.data.repository.SyncLogRepositoryImpl
 import com.example.data.repository.SyncQueueRepositoryImpl
 import com.example.domain.repository.CategoryRepository
+import com.example.domain.repository.ClipLineageRepository
 import com.example.domain.repository.ClipRepository
 import com.example.domain.repository.SyncLogRepository
 import com.example.domain.repository.SyncQueueRepository
@@ -109,7 +113,10 @@ object AppModule {
   fun provideDatabase(@ApplicationContext context: Context): SmartClipboardDatabase =
     Room.databaseBuilder(context, SmartClipboardDatabase::class.java, "smart_clipboard.db")
       .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-      .addMigrations(SmartClipboardDatabase.MIGRATION_1_2)
+      .addMigrations(
+        SmartClipboardDatabase.MIGRATION_1_2,
+        SmartClipboardDatabase.MIGRATION_2_3,
+      )
       .addCallback(
         object : RoomDatabase.Callback() {
           override fun onCreate(db: SupportSQLiteDatabase) {
@@ -134,6 +141,12 @@ object AppModule {
 
   @Provides fun provideClipDao(db: SmartClipboardDatabase): ClipDao = db.clipDao()
 
+  @Provides
+  fun provideClipRevisionDao(db: SmartClipboardDatabase): ClipRevisionDao = db.clipRevisionDao()
+
+  @Provides
+  fun provideClipTransitionDao(db: SmartClipboardDatabase): ClipTransitionDao = db.clipTransitionDao()
+
   @Provides fun provideSyncQueueDao(db: SmartClipboardDatabase): SyncQueueDao = db.syncQueueDao()
 
   @Provides fun provideCategoryDao(db: SmartClipboardDatabase): CategoryDao = db.categoryDao()
@@ -145,6 +158,10 @@ object AppModule {
 @InstallIn(SingletonComponent::class)
 abstract class BindingsModule {
   @Binds @Singleton abstract fun bindClipRepository(impl: ClipRepositoryImpl): ClipRepository
+
+  @Binds
+  @Singleton
+  abstract fun bindClipLineageRepository(impl: ClipLineageRepositoryImpl): ClipLineageRepository
 
   @Binds
   @Singleton

@@ -1,5 +1,6 @@
 package com.example.domain.usecase
 
+import com.example.domain.intelligence.ArabicTextNormalizer
 import com.example.domain.model.ClipContentType
 import com.example.domain.model.ClipItem
 import javax.inject.Inject
@@ -49,9 +50,9 @@ class SmartSearchUseCase @Inject constructor() {
         if (clip.updatedAt < minTimestamp) return@filter false
         if (filter.favoritesOnly && !clip.isFavorite) return@filter false
         if (q.isEmpty()) return@filter true
-        clip.title.contains(q, ignoreCase = true) ||
-          clip.content.contains(q, ignoreCase = true) ||
-          clip.tags.any { it.contains(q, ignoreCase = true) }
+        ArabicTextNormalizer.normalizedContains(clip.title, q) ||
+          ArabicTextNormalizer.normalizedContains(clip.content, q) ||
+          clip.tags.any { ArabicTextNormalizer.normalizedContains(it, q) }
       }
 
     return when (filter.sortOrder) {
@@ -76,13 +77,13 @@ class SmartSearchUseCase @Inject constructor() {
     var score = 0
     if (clip.title.equals(query, ignoreCase = true)) score += 100
     else if (clip.title.startsWith(query, ignoreCase = true)) score += 70
-    else if (clip.title.contains(query, ignoreCase = true)) score += 45
+    else if (ArabicTextNormalizer.normalizedContains(clip.title, query)) score += 45
 
     if (clip.tags.any { it.equals(query, ignoreCase = true) }) score += 60
-    else if (clip.tags.any { it.contains(query, ignoreCase = true) }) score += 30
+    else if (clip.tags.any { ArabicTextNormalizer.normalizedContains(it, query) }) score += 30
 
     if (clip.content.startsWith(query, ignoreCase = true)) score += 40
-    else if (clip.content.contains(query, ignoreCase = true)) score += 20
+    else if (ArabicTextNormalizer.normalizedContains(clip.content, query)) score += 20
 
     if (clip.isPinned) score += 10
     if (clip.isFavorite) score += 5

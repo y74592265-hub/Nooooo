@@ -217,6 +217,51 @@ interface ClipDao {
 
   @Query("DELETE FROM clips")
   suspend fun deleteAllClips()
+
+  /**
+   * SQL-level privacy boundary for IME: strictly excludes trashed & sensitive rows,
+   * and reads only a 180-char preview projection so sensitive ciphertext never touches IME memory.
+   */
+  @Query(
+    """
+    SELECT id, title, SUBSTR(content, 1, 180) AS preview, contentType, categoryId,
+           isPinned, isFavorite, useCount, lastPastedAt, updatedAt, versionNumber
+    FROM clips
+    WHERE isTrashed = 0 AND isSensitive = 0
+    ORDER BY isPinned DESC, useCount DESC, updatedAt DESC
+    LIMIT :limit
+    """
+  )
+  suspend fun getImeCandidateProjections(limit: Int): List<ImeClipProjectionRow>
+
+  @Query("SELECT content FROM clips WHERE id = :id AND isTrashed = 0 AND isSensitive = 0 LIMIT 1")
+  suspend fun getPasteableContentById(id: Long): String?
+
+  @Query(
+    """
+    SELECT * FROM clips
+    WHERE isTrashed = 0
+      AND isSensitive = 0
+      AND contentType = :contentType
+      AND updatedAt >= :minUpdatedAt
+    ORDER BY updatedAt DESC
+    LIMIT :limit
+    """
+  )
+  suspend fun findLineageCandidates(
+    contentType: ClipContentType,
+    minUpdatedAt: Long,
+    limit: Int = 20,
+  ): List<ClipEntity>
+
+  @Query("UPDATE clips SET useCount = useCount + 1, lastPastedAt = :nowMs WHERE id = :id AND isSensitive = 0")
+  suspend fun incrementUsage(id: Long, nowMs: Long)
+
+  @Query("UPDATE clips SET useCount = 0, lastPastedAt = NULL")
+  suspend fun resetAllUsageStats()
+
+  @Query("UPDATE clips SET parentClipId = NULL, versionNumber = 1, simHash = 0")
+  suspend fun clearAllLineageMetadata()
 }
 
 @Dao

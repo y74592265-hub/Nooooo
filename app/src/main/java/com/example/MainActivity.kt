@@ -24,11 +24,17 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
 
+  companion object {
+    const val ACTION_SHORTCUT_NEW_CLIP = "com.example.action.SHORTCUT_NEW_CLIP"
+    const val ACTION_SHORTCUT_SEARCH = "com.example.action.SHORTCUT_SEARCH"
+  }
+
   @Inject lateinit var prefs: AppPreferencesRepository
 
   private val clipboardViewModel: ClipboardViewModel by viewModels()
 
   private var sharedIncomingText by mutableStateOf<String?>(null)
+  private var shortcutAction by mutableStateOf<String?>(null)
   private var isLocked by mutableStateOf(false)
   private var lockErrorMessage by mutableStateOf<String?>(null)
   private var pendingFocusCapture = false
@@ -54,6 +60,8 @@ class MainActivity : FragmentActivity() {
         lockErrorMessage = lockErrorMessage,
         onRequestUnlock = { promptBiometricUnlock() },
         clipboardViewModel = clipboardViewModel,
+        shortcutAction = shortcutAction,
+        onShortcutActionConsumed = { shortcutAction = null },
       )
     }
   }
@@ -78,6 +86,16 @@ class MainActivity : FragmentActivity() {
 
   private fun extractIncomingShareText(intent: Intent?) {
     if (intent == null) return
+    when (intent.action) {
+      ACTION_SHORTCUT_NEW_CLIP -> {
+        shortcutAction = ACTION_SHORTCUT_NEW_CLIP
+        return
+      }
+      ACTION_SHORTCUT_SEARCH -> {
+        shortcutAction = ACTION_SHORTCUT_SEARCH
+        return
+      }
+    }
     val text =
       when (intent.action) {
         Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)

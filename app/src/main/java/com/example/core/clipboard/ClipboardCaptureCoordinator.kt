@@ -222,6 +222,7 @@ constructor(
       ) ?: return CaptureOutcome.EmptyOrDisabled
 
     prefs.updateLastDetectedClipHash(hash)
+    clipboardHelper.refreshWidgets()
 
     val queuedProviders =
       if (allowCloudSync && eligibleProviders.isNotEmpty()) {

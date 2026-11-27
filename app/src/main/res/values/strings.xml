@@ -430,11 +430,89 @@
     <string name="multicopy_dismiss_btn">Got it</string>
     <string name="settings_multicopy_note">Android 10+ limits background clipboard access to the focused app or active keyboard, so copying twice outside the app overwrites the first item in system memory. Use the Quick Capture Notification, Quick Settings Tile, or “Quick Save Clip” text action to save every copy instantly.</string>
     <string name="settings_quick_notif_title">Quick Capture Notification</string>
-    <string name="settings_quick_notif_subtitle">Keep a silent notification with a 1-tap “Save Clip” button so you can save multiple copies without leaving other apps</string>
+    <string name="settings_quick_notif_subtitle">Keep a silent static notification with a 1-tap “Save Clip” button (0% battery drain — no background service or polling)</string>
+    <string name="quick_notif_active_badge">Quick Notification: ON</string>
     <string name="quick_notif_channel_name">Quick Clipboard Capture</string>
     <string name="quick_notif_channel_desc">Silent shortcut notification for one-tap clipboard saving from any app</string>
     <string name="quick_notif_title">Smart Clipboard Ready</string>
     <string name="quick_notif_body">After copying text in any app, tap “Save Clip” here to store it without switching apps.</string>
     <string name="quick_notif_action">Save Clip</string>
     <string name="quick_notif_permission_denied">Notification permission denied — enable it in App Settings to use the Quick Capture Notification.</string>
+
+    <!-- Adaptive Field-Aware IME, Password Shield & Next-Clip -->
+    <string name="ime_shield_title">Password Shield Active</string>
+    <string name="ime_shield_hint">Protected input detected — clipboard suggestions, capture, and usage learning are paused.</string>
+    <string name="ime_filter_all">Smart</string>
+    <string name="ime_filter_links">Links</string>
+    <string name="ime_filter_code">Code</string>
+    <string name="ime_filter_pinned">Pinned</string>
+    <string name="ime_context_url">Link Field • Smart Suggestions</string>
+    <string name="ime_context_email">Email Field • Smart Suggestions</string>
+    <string name="ime_context_phone">Number/Phone Field • Smart Suggestions</string>
+    <string name="ime_context_code">Code/Notes Field • Smart Suggestions</string>
+    <string name="ime_reason_next">Next</string>
+    <string name="ime_reason_match">Match</string>
+    <string name="ime_reason_pin">Pin</string>
+
+    <!-- Smart Lineage, Version Diff & Zero-Dep Smart Tools -->
+    <string name="msg_clip_version_stacked">Updated draft — saved as v%1$d (previous version kept)</string>
+    <string name="msg_revision_restored">Restored draft version successfully</string>
+    <string name="msg_revision_split">Extracted version as an independent clip</string>
+    <string name="msg_learning_cleared">Usage prediction history erased</string>
+    <string name="msg_lineage_cleared">Draft version history erased</string>
+    <string name="details_smart_tools_title">Smart Instant Tools</string>
+    <string name="tool_clean_url">Clean Tracking Params</string>
+    <string name="tool_format_json">Format JSON</string>
+    <string name="tool_minify_json">Minify JSON</string>
+    <string name="tool_western_digits">٠١٢ → 012</string>
+    <string name="tool_decode_jwt_b64">Decode JWT / Base64</string>
+    <string name="tool_decoded_preview_title">Decoded Preview (Local)</string>
+    <string name="tool_extracted_entities_title">Quick Copy Extracted Items</string>
+    <string name="details_lineage_title">Draft Versions &amp; Diff (%1$d)</string>
+    <string name="details_lineage_subtitle">Similar drafts edited within 48h are stacked cleanly instead of cluttering your feed.</string>
+    <string name="details_lineage_truncated">Diff preview truncated for large text.</string>
+    <string name="details_lineage_restore_btn">Restore This Version</string>
+    <string name="details_lineage_split_btn">Split as Separate Clip</string>
+    <string name="details_version_badge">v%1$d</string>
+
+    <!-- Settings: Adaptive Intelligence & Privacy -->
+    <string name="settings_group_intelligence">Adaptive Intelligence &amp; Lineage</string>
+    <string name="settings_adaptive_ime_title">Field-Aware Smart Keyboard</string>
+    <string name="settings_adaptive_ime_subtitle">Rank links, emails, phones, and code first inside the companion keyboard — always hides in password fields</string>
+    <string name="settings_usage_learning_title">Next-Clip Prediction Learning (On-Device)</string>
+    <string name="settings_usage_learning_subtitle">Learns local paste sequences strictly on-device; never stores passwords or sensitive items</string>
+    <string name="settings_smart_lineage_title">Smart Draft Version Stacking</string>
+    <string name="settings_smart_lineage_subtitle">Group near-identical edited drafts within 48h under one clip with a line-by-line diff</string>
+    <string name="settings_clear_learning_btn">Erase Usage Prediction Data</string>
+    <string name="settings_clear_lineage_btn">Clear Draft Revision History</string>
+
+    <!-- Home Screen Widget & App Shortcuts -->
+    <string name="widget_description">Quick-copy pinned &amp; recent non-sensitive clips and capture your clipboard in 1 tap</string>
+    <string name="widget_capture_btn">+ Capture</string>
+    <string name="widget_empty_text">No clips yet — tap + Capture after copying text</string>
+    <string name="widget_locked_text">Vault Locked — tap here to unlock</string>
+    <string name="shortcut_capture_short">Capture</string>
+    <string name="shortcut_capture_long">Capture Clipboard Now</string>
+    <string name="shortcut_new_clip_short">New Clip</string>
+    <string name="shortcut_new_clip_long">Create New Clip</string>
+    <string name="shortcut_search_short">Search</string>
+    <string name="shortcut_search_long">Search Clipboard Vault</string>
+
+    <!-- Multi-Clip Merge & Dynamic Snippet Templates -->
+    <string name="bulk_merge_action">Merge Clips</string>
+    <string name="merge_dialog_title">Merge %1$d Selected Clips</string>
+    <string name="merge_separator_label">Separator between clips</string>
+    <string name="merge_sep_blank_line">Blank Line</string>
+    <string name="merge_sep_new_line">New Line</string>
+    <string name="merge_sep_space">Space</string>
+    <string name="merge_sep_comma">Comma</string>
+    <string name="merge_delete_originals">Move original clips to Trash after merging</string>
+    <string name="merge_sensitive_skipped_warn">Note: encrypted sensitive clips are excluded from plain merges.</string>
+    <string name="merge_default_title">Merged (%1$d)</string>
+    <string name="msg_clips_merged">Merged %1$d clips into one note</string>
+    <string name="msg_merge_need_two_nonsensitive">Select at least 2 non-sensitive clips to merge</string>
+    <string name="template_tokens_hint">Dynamic variables (auto-filled on copy):</string>
+    <string name="template_preview_title">Dynamic Template Preview</string>
+    <string name="template_copy_filled">Copy Filled Text</string>
+    <string name="msg_template_copied">Template filled &amp; copied to clipboard</string>
 </resources>

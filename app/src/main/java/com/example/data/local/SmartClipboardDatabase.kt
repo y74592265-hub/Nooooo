@@ -71,16 +71,22 @@ class RoomConverters {
     [
       ClipEntity::class,
       ClipFtsEntity::class,
+      ClipRevisionEntity::class,
+      ClipTransitionEntity::class,
       SyncQueueEntity::class,
       CategoryEntity::class,
       SyncLogEntity::class,
     ],
-  version = 2,
-  exportSchema = false,
+  version = 3,
+  exportSchema = true,
 )
 @TypeConverters(RoomConverters::class)
 abstract class SmartClipboardDatabase : RoomDatabase() {
   abstract fun clipDao(): ClipDao
+
+  abstract fun clipRevisionDao(): ClipRevisionDao
+
+  abstract fun clipTransitionDao(): ClipTransitionDao
 
   abstract fun syncQueueDao(): SyncQueueDao
 
@@ -89,6 +95,74 @@ abstract class SmartClipboardDatabase : RoomDatabase() {
   abstract fun syncLogDao(): SyncLogDao
 
   companion object {
+    val MIGRATION_2_3 =
+      object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+          db.execSQL("ALTER TABLE clips ADD COLUMN parentClipId INTEGER")
+          db.execSQL("ALTER TABLE clips ADD COLUMN versionNumber INTEGER NOT NULL DEFAULT 1")
+          db.execSQL("ALTER TABLE clips ADD COLUMN simHash INTEGER NOT NULL DEFAULT 0")
+          db.execSQL("ALTER TABLE clips ADD COLUMN useCount INTEGER NOT NULL DEFAULT 0")
+          db.execSQL("ALTER TABLE clips ADD COLUMN lastPastedAt INTEGER")
+
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_clips_isTrashed_isSensitive_isPinned_useCount_updatedAt` ON `clips` (`isTrashed`, `isSensitive`, `isPinned`, `useCount`, `updatedAt`)"
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_clips_isTrashed_isSensitive_contentType_updatedAt` ON `clips` (`isTrashed`, `isSensitive`, `contentType`, `updatedAt`)"
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_clips_parentClipId` ON `clips` (`parentClipId`)"
+          )
+
+          db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `clip_revisions` (
+              `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+              `clipId` INTEGER NOT NULL,
+              `versionNumber` INTEGER NOT NULL,
+              `content` TEXT NOT NULL,
+              `contentHash` TEXT NOT NULL,
+              `diffSummary` TEXT NOT NULL,
+              `createdAt` INTEGER NOT NULL,
+              FOREIGN KEY(`clipId`) REFERENCES `clips`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """
+              .trimIndent()
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_clip_revisions_clipId_versionNumber` ON `clip_revisions` (`clipId`, `versionNumber`)"
+          )
+          db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_clip_revisions_clipId_contentHash` ON `clip_revisions` (`clipId`, `contentHash`)"
+          )
+
+          db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `clip_transitions` (
+              `fromClipId` INTEGER NOT NULL,
+              `toClipId` INTEGER NOT NULL,
+              `weight` REAL NOT NULL,
+              `hitCount` INTEGER NOT NULL,
+              `lastTriggeredAt` INTEGER NOT NULL,
+              PRIMARY KEY(`fromClipId`, `toClipId`),
+              FOREIGN KEY(`fromClipId`) REFERENCES `clips`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+              FOREIGN KEY(`toClipId`) REFERENCES `clips`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """
+              .trimIndent()
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_clip_transitions_fromClipId_weight` ON `clip_transitions` (`fromClipId`, `weight`)"
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_clip_transitions_toClipId` ON `clip_transitions` (`toClipId`)"
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_clip_transitions_lastTriggeredAt` ON `clip_transitions` (`lastTriggeredAt`)"
+          )
+        }
+      }
+
     val MIGRATION_1_2 =
       object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
